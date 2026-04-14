@@ -33,4 +33,4 @@ jobs:
         git config --local user.name "GitHub Action"
         git add -f monitoreo_agricola.db
         git commit -m "Actualización automática" || echo "Sin cambios"
-        git push origin prueba
+        git push origin main
