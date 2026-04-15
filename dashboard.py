@@ -128,6 +128,15 @@ if not df_lote.empty:
             m3.metric("Lluvia", f"{df_dia['lluvia_mm'].sum():.1f} mm")
             m4.metric("Viento Máx", f"{df_dia['viento_ms'].max():.1f} m/s")
 
+            # 3. LLUVIA Y VIENTO
+            c1, c2 = st.columns(2)
+            with c1:
+                fig_l = px.bar(df_dia, x='fecha_pronosticada', y='lluvia_mm', title="Lluvia (mm)", color_discrete_sequence=['#00CC96'])
+                st.plotly_chart(config_estatico(fig_l), use_container_width=True, config={'displayModeBar': False}, key=f"l_{mod_sel}_{dia_actual}")
+            with c2:
+                fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', title="Viento (m/s)", color_discrete_sequence=['#AB63FA'])
+                st.plotly_chart(config_estatico(fig_v), use_container_width=True, config={'displayModeBar': False}, key=f"v_{mod_sel}_{dia_actual}")
+            
             # 2. GRÁFICO TEMP VS ROCÍO
             df_dia['dif'] = df_dia['temp_c'] - df_dia['punto_rocio_c']
             fig_t = go.Figure()
@@ -140,15 +149,6 @@ if not df_lote.empty:
             fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['punto_rocio_c'], name='Rocío', line=dict(color='cyan', width=3)))
             fig_t.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(config_estatico(fig_t), use_container_width=True, config={'displayModeBar': False}, key=f"t_rocio_{mod_sel}_{dia_actual}")
-
-            # 3. LLUVIA Y VIENTO
-            c1, c2 = st.columns(2)
-            with c1:
-                fig_l = px.bar(df_dia, x='fecha_pronosticada', y='lluvia_mm', title="Lluvia (mm)", color_discrete_sequence=['#00CC96'])
-                st.plotly_chart(config_estatico(fig_l), use_container_width=True, config={'displayModeBar': False}, key=f"l_{mod_sel}_{dia_actual}")
-            with c2:
-                fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', title="Viento (m/s)", color_discrete_sequence=['#AB63FA'])
-                st.plotly_chart(config_estatico(fig_v), use_container_width=True, config={'displayModeBar': False}, key=f"v_{mod_sel}_{dia_actual}")
 
             # 4. TABLA DETALLADA (DATOS QUE FALTABAN)
             with st.expander("📋 Ver Tabla Horaria Detallada"):
