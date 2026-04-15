@@ -32,12 +32,19 @@ def grados_a_direccion(grados):
 def cargar_datos_completos(lote_nombre):
     conn = sqlite3.connect("monitoreo_agricola.db")
     query = """
-    SELECT p.*, m.nombre as modelo_nombre, c.nombre as campo_nombre
+    SELECT 
+        p.*, 
+        m.nombre as modelo_nombre, 
+        c.nombre as campo_nombre
     FROM pronosticos_full p
     JOIN modelos m ON p.modelo_id = m.id
     JOIN campos c ON p.campo_id = c.id
     WHERE c.nombre = ?
-    AND p.fecha_consulta = (SELECT MAX(fecha_consulta) FROM pronosticos_full WHERE campo_id = c.id)
+    AND p.fecha_consulta = (
+        SELECT MAX(fecha_consulta) 
+        FROM pronosticos_full 
+        WHERE campo_id = p.campo_id AND modelo_id = p.modelo_id
+    )
     ORDER BY p.fecha_pronosticada ASC
     """
     try:
