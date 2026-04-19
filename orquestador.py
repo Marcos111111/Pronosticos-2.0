@@ -27,7 +27,7 @@ def ejecutar_actualizacion():
         proveedores = [
             OpenMeteoProvider(dias=7),
             YRProvider(dias=7),
-            GFSProvider(dias=10),
+            GFSProvider(dias=7),
             SMNProvider(dias=4)
         ]   
 
