@@ -40,6 +40,7 @@ def grados_a_direccion(grados):
     return direcciones[int(((grados + 22.5) % 360) // 45)]
 
 # --- CARGA DE DATOS ---
+@st.cache_data(ttl=600)
 def cargar_datos(lote_nombre):
     conn = sqlite3.connect("monitoreo_agricola.db") # Asegurate de usar DB_PATH que definimos antes
     
