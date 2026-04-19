@@ -41,26 +41,32 @@ def grados_a_direccion(grados):
 
 # --- CARGA DE DATOS ---
 def cargar_datos(lote_nombre):
-    conn = sqlite3.connect("monitoreo_agricola.db")
+    conn = sqlite3.connect("monitoreo_agricola.db") # Asegurate de usar DB_PATH que definimos antes
+    
     query = """
     SELECT p.*, m.nombre as modelo_nombre, c.nombre as campo_nombre
     FROM pronosticos_full p
     JOIN modelos m ON p.modelo_id = m.id
     JOIN campos c ON p.campo_id = c.id
     WHERE c.nombre = ?
-    AND p.fecha_consulta = (
-        SELECT MAX(fecha_consulta) 
-        FROM pronosticos_full 
-        WHERE campo_id = p.campo_id AND modelo_id = p.modelo_id
+    AND p.id IN (
+        -- Aquí seleccionamos los IDs más altos (los últimos en entrar)
+        -- filtrando por una ventana razonable para no barrer toda la tabla
+        SELECT MAX(id)
+        FROM pronosticos_full
+        WHERE id > (SELECT MAX(id) FROM pronosticos_full) - 10000
+        GROUP BY campo_id, modelo_id, fecha_pronosticada
     )
     ORDER BY p.fecha_pronosticada ASC
     """
+    
     df = pd.read_sql_query(query, conn, params=(lote_nombre,))
+    
     if not df.empty:
         df['fecha_pronosticada'] = pd.to_datetime(df['fecha_pronosticada'])
+        
     conn.close()
     return df
-
 # --- INTERFAZ ---
 try:
     conn = sqlite3.connect("monitoreo_agricola.db")
