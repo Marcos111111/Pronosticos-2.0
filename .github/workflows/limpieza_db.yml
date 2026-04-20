@@ -16,7 +16,7 @@ jobs:
           python-version: '3.12'
 
       - name: Ejecutar purga
-        run: python purgar_db.py
+        run: python limpieza_db.py
 
       - name: Commit y Push de la BD limpia
         run: |
