@@ -269,9 +269,6 @@ with st.sidebar:
     # 3. Selección de Modelo (solo si no es Resumen General)
     df_lote = cargar_datos(lote_sel)
     mod_sel = None
-    if not df_lote.empty and seccion != "Resumen General":
-        modelos = sorted(df_lote['modelo_nombre'].unique())
-        mod_sel = st.selectbox("🤖 Modelo de pronóstico", modelos)
 
 # --- CUERPO PRINCIPAL ---
 if not df_lote.empty:
@@ -301,65 +298,66 @@ if not df_lote.empty:
                                 color_discrete_map=MAPA_COLORES)
                 st.plotly_chart(config_estatico(fig_dia), use_container_width=True, key=f"resumen_dia_{fecha.strftime('%Y%m%d')}")
 
-    elif seccion == "Precipitaciones":
-        st.subheader(f"🌧️ Detalle de Lluvia: {mod_sel}")
-        tabs = st.tabs([nombre_dia_es(d) for d in dias_disp])
-        for i, tab in enumerate(tabs):
-            with tab:
-                fecha_str = dias_disp[i].strftime('%Y%m%d')
-                df_dia = df_lote[(df_lote['modelo_nombre'] == mod_sel) & (df_lote['fecha_pronosticada'].dt.date == dias_disp[i])]
-                st.metric("Total Acumulado", f"{df_dia['lluvia_mm'].sum():.1f} mm")
-                fig = px.bar(df_dia, x='fecha_pronosticada', y='lluvia_mm', 
-                            color_discrete_sequence=['#00CC96'],
-                            title=f"Lluvia estimada - {mod_sel}")
-                st.plotly_chart(config_estatico(fig), use_container_width=True, key=f"solo_lluvia_{mod_sel}_{fecha_str}")
+    else:
+        # --- PARA LAS DEMÁS SECCIONES (Precipitaciones, Aire y térmica, Tabla) ---
+        modelos = sorted(df_lote['modelo_nombre'].unique())
+        
+        # 1. PESTAÑAS DE MODELOS (Nivel Superior)
+        tabs_modelos = st.tabs([f" {m}" for m in modelos])
 
-    elif seccion == "Aire y termica": # SECCIÓN UNIFICADA
-        st.subheader(f"🌬️ Condiciones de Aire y Térmicas: {mod_sel}")
-        tabs = st.tabs([nombre_dia_es(d) for d in dias_disp])
-        for i, tab in enumerate(tabs):
-            with tab:
-                fecha_str = dias_disp[i].strftime('%Y%m%d')
-                df_dia = df_lote[(df_lote['modelo_nombre'] == mod_sel) & (df_lote['fecha_pronosticada'].dt.date == dias_disp[i])].copy()
+        for m_idx, m_tab in enumerate(tabs_modelos):
+            with m_tab:
+                modelo_actual = modelos[m_idx]
                 
-                # Métricas rápidas
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Máx T°", f"{df_dia['temp_c'].max():.1f}°")
-                m2.metric("Mín T°", f"{df_dia['temp_c'].min():.1f}°")
-                m3.metric("Viento Máx", f"{df_dia['viento_ms'].max():.1f} m/s")
-
-                # Gráfico de Viento
-                fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', title="Velocidad del Viento (m/s)",
-                                color_discrete_sequence=['#AB63FA'])
-                st.plotly_chart(config_estatico(fig_v), use_container_width=True, key=f"viento_unif_{mod_sel}_{fecha_str}")
-
-                # Gráfico de Temp vs Rocío (El de las barras de colores)
-                st.markdown("---")
-                st.write("**Delta T (Inversión Térmica)**")
-                df_dia['dif'] = df_dia['temp_c'] - df_dia['punto_rocio_c']
-                fig_t = go.Figure()
-                for _, r in df_dia.iterrows():
-                    color = "#ff4b4b" if r['dif'] < 4 else ("#f9d71c" if r['dif'] < 8 else "#00cc96")
-                    fig_t.add_shape(type="line", x0=r['fecha_pronosticada'], x1=r['fecha_pronosticada'],
-                                y0=r['punto_rocio_c'], y1=r['temp_c'], line=dict(color=color, width=4))
+                # 2. PESTAÑAS DE DÍAS (Nivel Inferior, dentro de cada modelo)
+                tabs_dias = st.tabs([nombre_dia_es(d) for d in dias_disp])
                 
-                fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['temp_c'], name='Temp', line=dict(color='red', width=3)))
-                fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['punto_rocio_c'], name='Rocío', line=dict(color='cyan', width=3)))
-                fig_t.update_layout(height=350, legend=dict(orientation="h", y=-0.2))
-                st.plotly_chart(config_estatico(fig_t), use_container_width=True, key=f"rocio_unif_{mod_sel}_{fecha_str}")
+                for d_idx, d_tab in enumerate(tabs_dias):
+                    with d_tab:
+                        dia_actual = dias_disp[d_idx]
+                        fecha_str = dia_actual.strftime('%Y%m%d')
+                        
+                        # Filtramos los datos para este modelo y este día
+                        df_dia = df_lote[(df_lote['modelo_nombre'] == modelo_actual) & 
+                                        (df_lote['fecha_pronosticada'].dt.date == dia_actual)].copy()
 
-    elif seccion == "Tabla Detallada":
-        st.subheader(f"📋 Datos Horarios: {mod_sel}")
-        tabs = st.tabs([nombre_dia_es(d) for d in dias_disp])
-        for i, tab in enumerate(tabs):
-            with tab:
-                df_dia = df_lote[(df_lote['modelo_nombre'] == mod_sel) & (df_lote['fecha_pronosticada'].dt.date == dias_disp[i])].copy()
-                df_dia['Dir'] = df_dia['viento_dir_deg'].apply(grados_a_direccion)
-                df_dia['Hora'] = df_dia['fecha_pronosticada'].dt.strftime('%H:%M')
-                cols = ['Hora', 'temp_c', 'punto_rocio_c', 'humedad_relativa', 'viento_ms', 'Dir', 'lluvia_mm']
-                st.dataframe(df_dia[cols].rename(columns={
-                    'temp_c': 'T°C', 'punto_rocio_c': 'Rocío', 'humedad_relativa': 'H%', 'viento_ms': 'V.m/s'
-                }), hide_index=True, use_container_width=True)
+                        if df_dia.empty:
+                            st.info("No hay datos para este día.")
+                            continue
+
+                        if seccion == "Precipitaciones":
+                            st.metric("Total Acumulado", f"{df_dia['lluvia_mm'].sum():.1f} mm")
+                            fig = px.bar(df_dia, x='fecha_pronosticada', y='lluvia_mm', 
+                                     color_discrete_sequence=['#00CC96'],
+                                     title=f"Lluvia: {modelo_actual} - {nombre_dia_es(dia_actual)}")
+                            st.plotly_chart(config_estatico(fig), use_container_width=True, key=f"ll_{modelo_actual}_{fecha_str}")
+        
+                        elif seccion == "Aire y termica": # SECCIÓN UNIFICADA
+                            m1, m2, m3 = st.columns(3)
+                            m1.metric("Máx T°", f"{df_dia['temp_c'].max():.1f}°")
+                            m2.metric("Mín T°", f"{df_dia['temp_c'].min():.1f}°")
+                            m3.metric("Viento Máx", f"{df_dia['viento_ms'].max():.1f} m/s")
+
+                            fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', 
+                                            color_discrete_sequence=['#AB63FA'])
+                            st.plotly_chart(config_estatico(fig_v), use_container_width=True, key=f"v_{modelo_actual}_{fecha_str}")
+
+                            st.markdown("---")
+                            df_dia['dif'] = df_dia['temp_c'] - df_dia['punto_rocio_c']
+                            fig_t = go.Figure()
+                            for _, r in df_dia.iterrows():
+                                color = "#ff4b4b" if r['dif'] < 4 else ("#f9d71c" if r['dif'] < 8 else "#00cc96")
+                                fig_t.add_shape(type="line", x0=r['fecha_pronosticada'], x1=r['fecha_pronosticada'],
+                                            y0=r['punto_rocio_c'], y1=r['temp_c'], line=dict(color=color, width=4))
+                            fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['temp_c'], name='T', line=dict(color='red')))
+                            fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['punto_rocio_c'], name='R', line=dict(color='cyan')))
+                            st.plotly_chart(config_estatico(fig_t), use_container_width=True, key=f"t_{modelo_actual}_{fecha_str}")
+                        elif seccion == "Tabla Detallada":
+                            df_dia['Dir'] = df_dia['viento_dir_deg'].apply(grados_a_direccion)
+                            df_dia['Hora'] = df_dia['fecha_pronosticada'].dt.strftime('%H:%M')
+                            cols = ['Hora', 'temp_c', 'punto_rocio_c', 'humedad_relativa', 'viento_ms', 'Dir', 'lluvia_mm']
+                            st.dataframe(df_dia[cols].rename(columns={'temp_c': 'T°C', 'punto_rocio_c': 'Rocío', 'humedad_relativa': 'H%'}), 
+                                        hide_index=True, use_container_width=True)
 
 else:
     st.warning("No hay datos disponibles para el lote seleccionado.")
