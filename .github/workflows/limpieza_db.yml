@@ -1,0 +1,28 @@
+name: Limpieza Manual de BD
+
+on:
+  workflow_dispatch: 
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Ejecutar purga
+        run: python purgar_db.py
+
+      - name: Commit y Push de la BD limpia
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git pull origin main --rebase
+          git add monitoreo_agricola.db
+          git commit -m "Limpieza manual: solo última consulta preservada" || exit 0
+          git push origin main
