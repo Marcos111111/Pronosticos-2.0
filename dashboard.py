@@ -105,26 +105,73 @@ if not df_lote.empty:
     # --- LÓGICA DE SECCIONES ---
     
     if seccion == "Resumen General":
-        st.subheader("📊 Comparativa de Precipitaciones (Todos los Modelos)")
+        st.subheader("📊 Comparativa de Precipitaciones")
         
-        # Recuperamos las pestañas para el resumen
-        nombres_tabs_comp = ["Toda la Semana"] + [nombre_dia_es(d) for d in dias_disp]
+        # 1. Preparación de datos de promedio
+        # Promedio por hora/fecha (lo que se ve en el gráfico)
+        df_prom_hora = df_lote.groupby('fecha_pronosticada')['lluvia_mm'].mean().reset_index()
+        # Promedio acumulado diario (para las métricas)
+        df_lote['fecha_solo_dia'] = df_lote['fecha_pronosticada'].dt.date
+        df_prom_dia = df_lote.groupby('fecha_solo_dia')['lluvia_mm'].mean().reset_index()
+
+        # --- TABS DEL RESUMEN ---
+        nombres_tabs_comp = ["Toda la Semana", "Tendencia (Promedio)"] + [nombre_dia_es(d) for d in dias_disp]
         tabs_comp = st.tabs(nombres_tabs_comp)
 
+        # TAB 1: La comparativa de barras que ya tenías
         with tabs_comp[0]:
             fig_total = px.bar(df_lote, x='fecha_pronosticada', y='lluvia_mm', color='modelo_nombre',
-                            barmode='group', height=400, color_discrete_map=MAPA_COLORES,
-                            title="Pronóstico Semanal Agrupado")
-            st.plotly_chart(config_estatico(fig_total), use_container_width=True, key="resumen_semanal_total")
+                            barmode='group', height=400, color_discrete_map=MAPA_COLORES)
+            st.plotly_chart(config_estatico(fig_total), use_container_width=True, key="resumen_barras")
 
-        for i, fecha in enumerate(dias_disp):
-            with tabs_comp[i+1]:
-                df_f = df_lote[df_lote['fecha_pronosticada'].dt.date == fecha]
-                fig_dia = px.bar(df_f, x='fecha_pronosticada', y='lluvia_mm', color='modelo_nombre',
-                                barmode='group', height=350, title=f"Comparativa: {nombre_dia_es(fecha)}",
-                                color_discrete_map=MAPA_COLORES)
-                st.plotly_chart(config_estatico(fig_dia), use_container_width=True, key=f"resumen_dia_{fecha.strftime('%Y%m%d')}")
+        # TAB 2: EL NUEVO GRÁFICO DE PROMEDIO (CONSENSO)
+        with tabs_comp[1]:
+            st.markdown("#### 📅 Consenso Diario (Acumulado Promedio)")
+            
+            # 1. Calculamos el acumulado por modelo por día
+            df_diario_modelos = df_lote.groupby(['fecha_solo_dia', 'modelo_nombre'])['lluvia_mm'].sum().reset_index()
+            
+            # 2. Calculamos el promedio de esos acumulados por día
+            df_consenso_diario = df_diario_modelos.groupby('fecha_solo_dia')['lluvia_mm'].mean().reset_index()
 
+            # Gráfico de barras simples para el consenso diario
+            fig_cons = px.bar(df_consenso_diario, 
+                            x='fecha_solo_dia', 
+                            y='lluvia_mm',
+                            title="Lluvia Total Promedio por Día",
+                            labels={'lluvia_mm': 'Milímetros (Promedio)', 'fecha_solo_dia': 'Día'},
+                            text_auto='.1f') # Muestra el numerito arriba de la barra
+            
+            fig_cons.update_traces(marker_color='#00CC96', marker_line_color='white', marker_line_width=1, opacity=0.8)
+            
+            # Ajustamos el eje X para que muestre los nombres de los días
+            fig_cons.update_layout(
+                xaxis=dict(
+                    tickmode='array',
+                    tickvals=df_consenso_diario['fecha_solo_dia'],
+                    ticktext=[nombre_dia_es(d) for d in df_consenso_diario['fecha_solo_dia']]
+                )
+            )
+            
+            st.plotly_chart(config_estatico(fig_cons), use_container_width=True, key="resumen_consenso_diario")
+
+            # Métricas de resumen debajo
+            c1, c2, c3 = st.columns(3)
+            total_semana = df_consenso_diario['lluvia_mm'].sum()
+            max_valor = df_consenso_diario['lluvia_mm'].max()
+            dia_max = df_consenso_diario.loc[df_consenso_diario['lluvia_mm'].idxmax(), 'fecha_solo_dia']
+
+            c1.metric("Acumulado Semanal", f"{total_semana:.1f} mm")
+            c2.metric("Día más lluvioso", nombre_dia_es(dia_max))
+            c3.metric("Máximo esperado", f"{max_valor:.1f} mm")
+
+            # EL RESTO DE TABS (Días individuales)
+            for i, fecha in enumerate(dias_disp):
+                with tabs_comp[i+2]: # +2 porque agregamos "Tendencia" al principio
+                    df_f = df_lote[df_lote['fecha_pronosticada'].dt.date == fecha]
+                    fig_dia = px.bar(df_f, x='fecha_pronosticada', y='lluvia_mm', color='modelo_nombre',
+                                    barmode='group', height=350, color_discrete_map=MAPA_COLORES)
+                    st.plotly_chart(config_estatico(fig_dia), use_container_width=True, key=f"resumen_dia_{fecha.strftime('%Y%m%d')}")
     else:
         # --- PARA LAS DEMÁS SECCIONES (Precipitaciones, Aire y térmica, Tabla) ---
         modelos = sorted(df_lote['modelo_nombre'].unique())
