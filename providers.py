@@ -110,20 +110,23 @@ class SMNProvider(WeatherProvider):
                         rocio = (b * alpha) / (a - alpha)
 
                         # Crear objeto de datos unificado
-                        resultados.append(ForecastData(
-                            campo_id=campo.id_db,
-                            modelo_id=self.modelo_id,
-                            fecha_pronosticada=str_fecha_p,
-                            dias_antelacion=diff_dias,
-                            temp_c=round(temp, 1),
-                            punto_rocio_c=round(rocio, 1),
-                            humedad_relativa=round(hum, 1),
-                            viento_ms=round(viento_ms, 1),
-                            viento_dir_deg=0, # No disponible en este extracto directo
-                            lluvia_mm=round(lluvia_hora, 2),
-                            presion_hpa=round(presion, 1),
-                            fecha_consulta=str_consulta
-                        ))
+                        if diff_dias >= 0:
+                            resultados.append(ForecastData(
+                                campo_id=campo.id_db,
+                                modelo_id=self.modelo_id,
+                                fecha_pronosticada=str_fecha_p,
+                                dias_antelacion=diff_dias,
+                                temp_c=round(temp, 1),
+                                punto_rocio_c=round(rocio, 1),
+                                humedad_relativa=round(hum, 1),
+                                viento_ms=round(viento_ms, 1),
+                                viento_dir_deg=0, # No disponible en este extracto directo
+                                lluvia_mm=round(lluvia_hora, 2),
+                                presion_hpa=round(presion, 1),
+                                fecha_consulta=str_consulta
+                            ))
+                        else:
+                            pass
                 
                 if lt % 24 == 0:
                     print(f"✅ [SMN] Día {lt // 24} procesado...")
