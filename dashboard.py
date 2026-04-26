@@ -126,7 +126,7 @@ if not df_lote.empty:
 
         # TAB 2: EL NUEVO GRÁFICO DE PROMEDIO (CONSENSO)
         with tabs_comp[1]:
-            st.markdown("#### 📅 Consenso Diario (Acumulado Promedio)")
+            st.markdown("#### 📅 Promedio por dia")
             
             # 1. Calculamos el acumulado por modelo por día
             df_diario_modelos = df_lote.groupby(['fecha_solo_dia', 'modelo_nombre'])['lluvia_mm'].sum().reset_index()
