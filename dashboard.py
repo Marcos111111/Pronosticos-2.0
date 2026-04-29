@@ -212,11 +212,6 @@ if not df_lote.empty:
                             m2.metric("Mín T°", f"{df_dia['temp_c'].min():.1f}°")
                             m3.metric("Viento Máx", f"{df_dia['viento_ms'].max():.1f} m/s")
 
-                            fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', 
-                                            color_discrete_sequence=['#AB63FA'])
-                            st.plotly_chart(config_estatico(fig_v), use_container_width=True, key=f"v_{modelo_actual}_{fecha_str}")
-
-                            st.markdown("---")
                             df_dia['dif'] = df_dia['temp_c'] - df_dia['punto_rocio_c']
                             fig_t = go.Figure()
                             for _, r in df_dia.iterrows():
@@ -226,6 +221,13 @@ if not df_lote.empty:
                             fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['temp_c'], name='T', line=dict(color='red')))
                             fig_t.add_trace(go.Scatter(x=df_dia['fecha_pronosticada'], y=df_dia['punto_rocio_c'], name='R', line=dict(color='cyan')))
                             st.plotly_chart(config_estatico(fig_t), use_container_width=True, key=f"t_{modelo_actual}_{fecha_str}")
+                            
+                            st.markdown("---")
+
+                            fig_v = px.line(df_dia, x='fecha_pronosticada', y='viento_ms', 
+                                            color_discrete_sequence=['#AB63FA'])
+                            st.plotly_chart(config_estatico(fig_v), use_container_width=True, key=f"v_{modelo_actual}_{fecha_str}")
+
                         elif seccion == "Tabla Detallada":
                             df_dia['Dir'] = df_dia['viento_dir_deg'].apply(grados_a_direccion)
                             df_dia['Hora'] = df_dia['fecha_pronosticada'].dt.strftime('%H:%M')
