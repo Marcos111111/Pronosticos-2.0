@@ -3,6 +3,7 @@ import time
 from config import CAMPOS
 from db_manager import DatabaseManager
 from providers import SMNProvider
+from script import actualizar_json
 from api_providers import OpenMeteoProvider, YRProvider, GFSProvider
 
 def ejecutar_actualizacion():
@@ -63,3 +64,4 @@ def ejecutar_actualizacion():
 
 if __name__ == "__main__":
     ejecutar_actualizacion()
+    actualizar_json('monitoreo_agricola.db')
