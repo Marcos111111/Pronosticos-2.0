@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroClima Pro - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #f1f5f9; font-family: 'Inter', sans-serif; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 1.25rem; }
+        .btn-tab { transition: all 0.2s; border: 1px solid transparent; }
+        .btn-active { background-color: #3b82f6 !important; color: white !important; border-color: #60a5fa; }
+        .btn-model { background: #1e293b; color: #94a3b8; font-size: 10px; font-weight: 800; padding: 8px 12px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; }
+        .btn-model-active { color: white; background: #2563eb; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="pb-10">
+
+    <div class="sticky top-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 mb-6">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-800 italic uppercase text-white">Agro<span class="text-blue-500">Clima</span></h1>
+                <select id="selector-lote" onchange="cambiarLote(this.value)" class="bg-slate-800 border border-slate-700 text-blue-400 text-sm font-800 py-1 px-3 rounded-lg outline-none">
+                    <option value="elida.json">Elida</option>
+                    <option value="magliano.json">Magliano</option>
+                    <option value="chañar.json">Chañar</option>
+                </select>
+            </div>
+            <div class="flex gap-2 w-full md:w-auto">
+                <button id="tab-resumen" onclick="verSeccion('resumen')" class="btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest">Resumen</button>
+                <button id="tab-aire" onclick="verSeccion('aire')" class="btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest">Modelos</button>
+                <button id="tab-prueba" onclick="verSeccion('prueba')" class="btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest text-blue-300">Consenso</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-6xl mx-auto px-4 space-y-6">
+        
+        <div class="card flex items-center justify-between py-2 px-5 max-w-xs mx-auto bg-slate-800/50">
+            <span class="text-[10px] font-800 text-slate-500 uppercase">Rango:</span>
+            <select id="selector-fecha" onchange="filtrarPorFecha(this.value)" class="bg-transparent text-blue-400 text-xs font-800 outline-none cursor-pointer">
+                <option value="all">Próximos 7 días</option>
+            </select>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="card border-l-4 border-l-red-500 text-center">
+                <span class="text-[9px] font-800 text-slate-500 uppercase">T. Máx/Mín</span>
+                <div class="text-xl font-800"><span id="kpi-temp-max">--</span> / <span id="kpi-temp-min" class="text-blue-400">--</span> <span class="text-xs text-slate-500">°C</span></div>
+            </div>
+            <div class="card border-l-4 border-l-emerald-500 text-center">
+                <span class="text-[9px] font-800 text-slate-500 uppercase">Humedad Máx</span>
+                <div class="text-xl font-800"><span id="kpi-hum-max">--</span> <span class="text-xs text-slate-500">%</span></div>
+            </div>
+            <div class="card border-l-4 border-l-pink-500 text-center">
+                <span class="text-[9px] font-800 text-slate-500 uppercase">Delta Mín</span>
+                <div class="text-xl font-800"><span id="kpi-delta-min">--</span> <span class="text-xs text-slate-500">°C</span></div>
+            </div>
+            <div class="card border-l-4 border-l-violet-500 text-center">
+                <span class="text-[9px] font-800 text-slate-500 uppercase">Viento Máx</span>
+                <div class="text-xl font-800"><span id="kpi-viento-max">--</span> <span class="text-xs text-slate-500">m/s</span></div>
+            </div>
+        </div>
+
+        <div id="sec-resumen" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card"><div id="chart-diario"></div></div>
+            <div class="card"><div id="chart-horario"></div></div>
+        </div>
+
+        <div id="sec-aire" class="hidden space-y-6">
+            <div id="model-selector-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-2 justify-center"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card"><div id="chart-temp-rocio"></div></div>
+                <div class="card"><div id="chart-delta"></div></div>
+                <div class="card"><div id="chart-humedad"></div></div>
+                <div class="card"><div id="chart-viento"></div></div>
+            </div>
+        </div>
+
+        <p id="footer-sync" class="text-center text-[10px] text-slate-600 font-mono italic">--</p>
+    </main>
+
+    <script>
+        let charts = {};
+        let rawData = null;
+        let selectedModel = null;
+        let fechaFiltro = "all";
+        let seccionActual = "resumen";
+
+        // TUS COLORES ORIGINALES RESTAURADOS
+        const MODEL_COLORS = { 'GFS': '#0212A5', 'OpenMeteo': '#FF5757', 'SMN_WRF': '#D6D306', 'Met_Norway': '#00CC96', 'CONSENSO': '#60a5fa' };
+
+        // TU CONFIGURACIÓN ORIGINAL RESTAURADA (Cuadrículas marcadas, textos en gris)
+        const commonOptions = {
+            chart: { toolbar: { show: false }, zoom: { enabled: true }, background: 'transparent', height: 250, animations: { enabled: false } },
+            theme: { mode: 'dark' },
+            stroke: { curve: 'smooth', width: 2 },
+            xaxis: { type: 'datetime', labels: { datetimeUTC: false, style: { colors: '#94a3b8', fontSize: '10px' } } },
+            yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10px' } } },
+            grid: { show: true, borderColor: '#334155', strokeDashArray: 0 }, // Cuadrícula restaurada
+            dataLabels: { enabled: false }
+        };
+
+        function inicializarGraficos() {
+            // 1. LLUVIA DIARIA (Media) - ¡Eje X corregido a 'category' para evitar el error!
+            charts.diario = new ApexCharts(document.querySelector("#chart-diario"), {
+                ...commonOptions, chart: { ...commonOptions.chart, type: 'bar' },
+                xaxis: { type: 'category', labels: { style: { colors: '#94a3b8', fontSize: '10px' } } },
+                colors: ['#3b82f6'], series: [], title: { text: 'Lluvia Diaria (Media)' }
+            });
+
+            // 2. LLUVIA HORARIA POR MODELO
+            charts.horario = new ApexCharts(document.querySelector("#chart-horario"), {
+                ...commonOptions, chart: { ...commonOptions.chart, type: 'bar' },
+                series: [], title: { text: 'Lluvia por Modelo' }
+            });
+
+            // 3. VARIABLES DETALLADAS CON TUS COLORES ESPECÍFICOS Y GRADIENTES
+            charts.temp = new ApexCharts(document.querySelector("#chart-temp-rocio"), { 
+                ...commonOptions, colors: ['#ef4444', '#06b6d4'], title: { text: 'T° y Rocío' }, series: [] 
+            });
+            
+            charts.delta = new ApexCharts(document.querySelector("#chart-delta"), { 
+                ...commonOptions, chart: { ...commonOptions.chart, type: 'area' },
+                colors: ['#f472b6'], fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0 } }, 
+                title: { text: 'Depresión Punto Rocío' }, series: [] 
+            });
+            
+            charts.hum = new ApexCharts(document.querySelector("#chart-humedad"), { 
+                ...commonOptions, colors: ['#10b981'], title: { text: 'Humedad %' }, series: [] 
+            });
+            
+            charts.viento = new ApexCharts(document.querySelector("#chart-viento"), { 
+                ...commonOptions, colors: ['#8b5cf6'], title: { text: 'Viento m/s' }, series: [] 
+            });
+
+            Object.values(charts).forEach(c => c.render());
+        }
+
+        async function cambiarLote(archivo) {
+            try {
+                const res = await fetch(`data/${archivo}`);
+                rawData = await res.json();
+                poblarSelectorFechas();
+                actualizarPantalla();
+            } catch (e) { console.error("Error al cargar JSON:", e); }
+        }
+
+        function poblarSelectorFechas() {
+            const select = document.getElementById('selector-fecha');
+            select.innerHTML = '<option value="all">Próximos 7 días</option>';
+            const mKey = Object.keys(rawData.horario)[0];
+            const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))];
+            diasUnicos.forEach(f => {
+                const opt = document.createElement('option'); opt.value = f;
+                // Formateo manual para no depender del locale de Apex
+                const d = new Date(f + "T12:00:00");
+                const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                opt.innerText = `${dias[d.getDay()]} ${d.getDate().toString().padStart(2, '0')}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function generarSelectorModelos() {
+            const container = document.getElementById('model-selector-container');
+            container.innerHTML = '';
+            Object.keys(rawData.horario).filter(m => m !== 'CONSENSO').forEach(m => {
+                const btn = document.createElement('button'); btn.innerText = m;
+                btn.className = `btn-model ${m === selectedModel ? 'btn-model-active' : ''}`;
+                btn.style.borderLeft = `4px solid ${MODEL_COLORS[m] || '#ccc'}`;
+                btn.onclick = () => { selectedModel = m; generarSelectorModelos(); renderizarClima(); };
+                container.appendChild(btn);
+            });
+        }
+
+        function filtrarPorFecha(val) { fechaFiltro = val; actualizarPantalla(); }
+
+        function actualizarPantalla() { 
+            document.getElementById('sec-resumen').style.display = (seccionActual === 'resumen') ? 'grid' : 'none';
+            document.getElementById('sec-aire').style.display = (seccionActual !== 'resumen') ? 'block' : 'none';
+
+            if (seccionActual === "resumen") {
+                renderizarResumen();
+            } else {
+                if (seccionActual === 'prueba') {
+                    selectedModel = 'CONSENSO';
+                    document.getElementById('model-selector-container').style.display = 'none';
+                } else {
+                    if (!selectedModel || selectedModel === 'CONSENSO') selectedModel = Object.keys(rawData.horario)[0];
+                    document.getElementById('model-selector-container').style.display = 'flex';
+                    generarSelectorModelos();
+                }
+                renderizarClima(); 
+            }
+            document.getElementById('footer-sync').innerText = `Sync: ${rawData.metadata.actualizado} | Lote: ${rawData.metadata.lote}`;
+        }
+
+        function obtenerDatosFiltrados(dataArray) {
+            if(!dataArray) return [];
+            return fechaFiltro === "all" ? dataArray : dataArray.filter(p => p.x.startsWith(fechaFiltro));
+        }
+
+        function renderizarResumen() {
+            // Lluvia Diaria (Solucionado el problema del JSON)
+            charts.diario.updateOptions({ xaxis: { categories: rawData.diario.labels } });
+            charts.diario.updateSeries([{ name: 'Lluvia Media', data: rawData.diario.data }]);
+
+            // Lluvia Horaria por Modelo
+            const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
+            const seriesLluvia = modelos.map(m => ({
+                name: m, 
+                data: obtenerDatosFiltrados(rawData.horario[m]).map(p => ({ x: new Date(p.x).getTime(), y: p.y > 0 ? p.y : null }))
+            }));
+            charts.horario.updateOptions({ colors: modelos.map(m => MODEL_COLORS[m] || '#fff') });
+            charts.horario.updateSeries(seriesLluvia);
+
+            actualizarKPIs(obtenerDatosFiltrados(rawData.horario['CONSENSO']));
+        }
+
+        function renderizarClima() {
+            const d = obtenerDatosFiltrados(rawData.horario[selectedModel]);
+            if(d.length === 0) return;
+
+            charts.temp.updateSeries([{ name: 'Temp', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.temp })) }, { name: 'Rocío', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.rocio })) }]);
+            charts.delta.updateSeries([{ name: 'Delta', data: d.map(p => ({ x: new Date(p.x).getTime(), y: parseFloat((p.temp - p.rocio).toFixed(1)) })) }]);
+            charts.hum.updateSeries([{ name: 'Hum', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.hum })) }]);
+            charts.viento.updateSeries([{ name: 'Viento', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.viento })) }]);
+            
+            actualizarKPIs(d);
+        }
+
+        function actualizarKPIs(datos) {
+            if (!datos || datos.length === 0) return;
+            const temps = datos.map(p => p.temp), hums = datos.map(p => p.hum), vientos = datos.map(p => p.viento);
+            const deltas = datos.map(p => parseFloat((p.temp - p.rocio).toFixed(1)));
+            
+            document.getElementById('kpi-temp-max').innerText = Math.max(...temps).toFixed(1);
+            document.getElementById('kpi-temp-min').innerText = Math.min(...temps).toFixed(1);
+            document.getElementById('kpi-hum-max').innerText = Math.max(...hums).toFixed(0);
+            document.getElementById('kpi-viento-max').innerText = Math.max(...vientos).toFixed(1);
+            document.getElementById('kpi-delta-min').innerText = Math.min(...deltas).toFixed(1);
+        }
+
+        function verSeccion(sec) {
+            seccionActual = sec;
+            const tabs = ['resumen', 'aire', 'prueba'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                btn.className = t === sec ? 
+                    'btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest' : 
+                    'btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest';
+                if(t === 'prueba' && t !== sec) btn.classList.add('text-blue-300'); // Mantener el tinte azul
+            });
+            actualizarPantalla();
+            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50);
+        }
+
+        window.onload = () => { inicializarGraficos(); cambiarLote('elida.json'); };
+    </script>
+</body>
+</html>
