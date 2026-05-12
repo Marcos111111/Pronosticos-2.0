@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgroClima Pro - Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
@@ -15,6 +16,7 @@
         .btn-model { background: #1e293b; color: #94a3b8; font-size: 10px; font-weight: 800; padding: 8px 12px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; }
         .btn-model-active { color: white; background: #2563eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        canvas { width: 100% !important; height: 250px !important; cursor: crosshair; }
     </style>
 </head>
 <body class="pb-10">
@@ -23,13 +25,8 @@
         <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
                 <h1 class="text-xl font-800 italic uppercase text-white">Agro<span class="text-blue-500">Clima</span></h1>
-                <select id="selector-lote" onchange="cambiarLote(this.value)" class="bg-slate-800 border border-slate-700 text-blue-400 text-sm font-800 py-1 px-3 rounded-lg outline-none">
-                    <option value="elida.json">Elida</option>
-                    <option value="magliano.json">Magliano</option>
-                    <option value="chañar.json">Chañar</option>
-                    <option value="serrano.json">Serrano</option>
-                    <option value="gomez.json">Gomez</option>
-                </select>
+                <select id="selector-lote" onchange="cambiarLote(this.value)" class="bg-slate-800 border border-slate-700 text-blue-400 text-sm font-800 py-1 px-3 rounded-lg outline-none"></select>
+                <button onclick="resetAllZooms()" class="bg-slate-700 text-[9px] font-800 px-2 py-1 rounded border border-slate-600 uppercase text-slate-400 hover:text-white">Reset Zoom</button>
             </div>
             <div class="flex gap-2 w-full md:w-auto">
                 <button id="tab-resumen" onclick="verSeccion('resumen')" class="btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest">Resumen</button>
@@ -40,7 +37,6 @@
     </div>
 
     <main class="max-w-6xl mx-auto px-4 space-y-6">
-        
         <div class="card flex items-center justify-between py-2 px-5 max-w-xs mx-auto bg-slate-800/50">
             <span class="text-[10px] font-800 text-slate-500 uppercase">Rango:</span>
             <select id="selector-fecha" onchange="filtrarPorFecha(this.value)" class="bg-transparent text-blue-400 text-xs font-800 outline-none cursor-pointer">
@@ -68,17 +64,17 @@
         </div>
 
         <div id="sec-resumen" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="card"><div id="chart-diario"></div></div>
-            <div class="card"><div id="chart-horario"></div></div>
+            <div class="card"><canvas id="chart-diario"></canvas></div>
+            <div class="card"><canvas id="chart-horario"></canvas></div>
         </div>
 
         <div id="sec-aire" class="hidden space-y-6">
             <div id="model-selector-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-2 justify-center"></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card"><div id="chart-temp-rocio"></div></div>
-                <div class="card"><div id="chart-delta"></div></div>
-                <div class="card"><div id="chart-humedad"></div></div>
-                <div class="card"><div id="chart-viento"></div></div>
+                <div class="card"><canvas id="chart-temp-rocio"></canvas></div>
+                <div class="card"><canvas id="chart-delta"></canvas></div>
+                <div class="card"><canvas id="chart-humedad"></canvas></div>
+                <div class="card"><canvas id="chart-viento"></canvas></div>
             </div>
         </div>
 
@@ -86,73 +82,126 @@
     </main>
 
     <script>
+        // --- CONFIGURACIÓN GLOBAL Y ESTADO ---
+        const ARCHIVOS_LISTA = ["elida.json", "magliano.json", "chañar.json", "serrano.json", "gomez.json"];
         let charts = {};
         let rawData = null;
         let selectedModel = null;
         let fechaFiltro = "all";
         let seccionActual = "resumen";
 
-        // TUS COLORES ORIGINALES RESTAURADOS
-        const MODEL_COLORS = { 'GFS': '#0212A5', 'OpenMeteo': '#FF5757', 'SMN_WRF': '#D6D306', 'Met_Norway': '#00CC96', 'CONSENSO': '#60a5fa' };
-
-        // TU CONFIGURACIÓN ORIGINAL RESTAURADA (Cuadrículas marcadas, textos en gris)
-        const commonOptions = {
-            chart: { toolbar: { show: true }, zoom: { enabled: true }, background: 'transparent', height: 250, animations: { enabled: false }, reset: {enabled: true}},
-            zoom: {enabled: true, type: 'x', autoScaleYaxis: true},
-            events: {beforeResetZoom: function(chartContext, opts) {return true;}},
-            height: 250,
-            animations: { enabled: false },
-            theme: { mode: 'dark' },
-            stroke: { curve: 'smooth', width: 2 },
-            xaxis: { type: 'datetime', labels: { datetimeUTC: false, style: { colors: '#94a3b8', fontSize: '10px' } } },
-            yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10px' } } },
-            grid: { show: true, borderColor: '#334155', strokeDashArray: 0 }, // Cuadrícula restaurada
-            dataLabels: { enabled: false }
+        const MODEL_COLORS = { 
+            'GFS': '#0212A5', 'OpenMeteo': '#FF5757', 'SMN_WRF': '#D6D306', 
+            'Met_Norway': '#00CC96', 'CONSENSO': '#60a5fa' 
         };
 
-        function inicializarGraficos() {
-            // 1. LLUVIA DIARIA (Media) - ¡Eje X corregido a 'category' para evitar el error!
-            charts.diario = new ApexCharts(document.querySelector("#chart-diario"), {
-                ...commonOptions, chart: { ...commonOptions.chart, type: 'bar' },
-                xaxis: { type: 'category', labels: { style: { colors: '#94a3b8', fontSize: '10px' } } },
-                colors: ['#3b82f6'], series: [], title: { text: 'Lluvia Diaria (Media)' }
+        // --- TRADUCCIÓN (Copiada del éxito del gráfico diario) ---
+        function traducirDia(label) {
+            if (!label) return "";
+            const mapeo = {
+                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 
+                'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
+            };
+            let res = label;
+            Object.entries(mapeo).forEach(([ing, esp]) => {
+                res = res.replace(ing, esp);
+            });
+            return res;
+        }
+
+        // --- CONFIGURACIÓN EJES X ---
+        const getDynamicXConfig = (isFiltered) => ({
+            grid: { display: false },
+            ticks: {
+                color: '#94a3b8',
+                font: { size: 10, weight: '600' },
+                autoSkip: false,
+                maxRotation: 0,
+                callback: function(value, index, values) {
+                    const label = this.getLabelForValue(value); // El label ya viene traducido
+                    
+                    if (isFiltered) {
+                        // Vista 1 día: 1 hora de por medio (cada 2 horas)
+                        const partes = label.split(' ');
+                        const hora = partes[partes.length - 1];
+                        const hInt = parseInt(hora.split(':')[0]);
+                        return (hInt % 2 === 0) ? hora : "";
+                    }
+
+                    // Vista 7 días: Solo el nombre del día al inicio de cada jornada
+                    const diaId = label.split(' ')[0];
+                    if (index > 0) {
+                        const prevLabel = this.getLabelForValue(values[index - 1].value);
+                        if (prevLabel.startsWith(diaId)) return "";
+                    }
+                    return diaId;
+                }
+            }
+        });
+
+        // --- OPCIONES BASE (Lógica simplificada como el gráfico de barras) ---
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                legend: { labels: { color: '#94a3b8', font: { size: 10, weight: '800' } } },
+                tooltip: {
+                    enabled: true // Al no poner callbacks, usa el label del eje X (que ya traducimos abajo)
+                },
+                zoom: {
+                    pan: { enabled: true, mode: 'x' },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        drag: { enabled: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                        mode: 'x',
+                        onZoomComplete: ({chart}) => chart.update('none')
+                    }
+                }
+            },
+            scales: {
+                y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                x: getDynamicXConfig(false)
+            }
+        };
+
+        // --- INICIALIZACIÓN Y CARGA ---
+        async function inicializarApp() {
+            const selectLote = document.getElementById('selector-lote');
+            const infoLotes = await Promise.all(ARCHIVOS_LISTA.map(async f => {
+                try {
+                    const r = await fetch(`data/${f}`);
+                    const j = await r.json();
+                    return { file: f, nombre: j.metadata.lote };
+                } catch(e) { return null; }
+            }));
+            
+            infoLotes.filter(l => l).forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l.file; opt.textContent = l.nombre;
+                selectLote.appendChild(opt);
             });
 
-            // 2. LLUVIA HORARIA POR MODELO
-            charts.horario = new ApexCharts(document.querySelector("#chart-horario"), {
-                ...commonOptions, chart: { ...commonOptions.chart, type: 'bar' },
-                series: [], title: { text: 'Lluvia por Modelo' }
+            const ctxs = ['chart-diario', 'chart-horario', 'chart-temp-rocio', 'chart-delta', 'chart-humedad', 'chart-viento'];
+            ctxs.forEach(id => {
+                const key = id.replace('chart-', '').replace('-rocio', '');
+                const type = id === 'chart-diario' || id === 'chart-horario' ? 'bar' : 'line';
+                charts[key] = new Chart(document.getElementById(id), { 
+                    type, 
+                    data: { labels: [], datasets: [] }, 
+                    options: JSON.parse(JSON.stringify(baseOptions)) 
+                });
             });
 
-            // 3. VARIABLES DETALLADAS CON TUS COLORES ESPECÍFICOS Y GRADIENTES
-            charts.temp = new ApexCharts(document.querySelector("#chart-temp-rocio"), { 
-                ...commonOptions, colors: ['#ef4444', '#06b6d4'], title: { text: 'T° y Rocío' }, series: [] 
-            });
-            
-            charts.delta = new ApexCharts(document.querySelector("#chart-delta"), { 
-                ...commonOptions, chart: { ...commonOptions.chart, type: 'area' },
-                colors: ['#f472b6'], fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0 } }, 
-                title: { text: 'Depresión Punto Rocío' }, series: [] 
-            });
-            
-            charts.hum = new ApexCharts(document.querySelector("#chart-humedad"), { 
-                ...commonOptions, colors: ['#10b981'], title: { text: 'Humedad %' }, series: [] 
-            });
-            
-            charts.viento = new ApexCharts(document.querySelector("#chart-viento"), { 
-                ...commonOptions, colors: ['#8b5cf6'], title: { text: 'Viento m/s' }, series: [] 
-            });
-
-            Object.values(charts).forEach(c => c.render());
+            cambiarLote(selectLote.value);
         }
 
         async function cambiarLote(archivo) {
-            try {
-                const res = await fetch(`data/${archivo}`);
-                rawData = await res.json();
-                poblarSelectorFechas();
-                actualizarPantalla();
-            } catch (e) { console.error("Error al cargar JSON:", e); }
+            const res = await fetch(`data/${archivo}`);
+            rawData = await res.json();
+            poblarSelectorFechas();
+            actualizarPantalla();
         }
 
         function poblarSelectorFechas() {
@@ -161,88 +210,94 @@
             const mKey = Object.keys(rawData.horario)[0];
             const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))];
             diasUnicos.forEach(f => {
-                const opt = document.createElement('option'); opt.value = f;
-                // Formateo manual para no depender del locale de Apex
                 const d = new Date(f + "T12:00:00");
                 const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                opt.innerText = `${dias[d.getDay()]} ${d.getDate().toString().padStart(2, '0')}`;
+                const opt = document.createElement('option');
+                opt.value = f; opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
                 select.appendChild(opt);
             });
         }
 
-        function generarSelectorModelos() {
-            const container = document.getElementById('model-selector-container');
-            container.innerHTML = '';
-            Object.keys(rawData.horario).filter(m => m !== 'CONSENSO').forEach(m => {
-                const btn = document.createElement('button'); btn.innerText = m;
-                btn.className = `btn-model ${m === selectedModel ? 'btn-model-active' : ''}`;
-                btn.style.borderLeft = `4px solid ${MODEL_COLORS[m] || '#ccc'}`;
-                btn.onclick = () => { selectedModel = m; generarSelectorModelos(); renderizarClima(); };
-                container.appendChild(btn);
-            });
-        }
-
-        function filtrarPorFecha(val) { fechaFiltro = val; actualizarPantalla(); }
-
-        function actualizarPantalla() { 
+        function actualizarPantalla() {
             document.getElementById('sec-resumen').style.display = (seccionActual === 'resumen') ? 'grid' : 'none';
             document.getElementById('sec-aire').style.display = (seccionActual !== 'resumen') ? 'block' : 'none';
 
             if (seccionActual === "resumen") {
                 renderizarResumen();
             } else {
-                if (seccionActual === 'prueba') {
-                    selectedModel = 'CONSENSO';
-                    document.getElementById('model-selector-container').style.display = 'none';
-                } else {
-                    if (!selectedModel || selectedModel === 'CONSENSO') selectedModel = Object.keys(rawData.horario)[0];
-                    document.getElementById('model-selector-container').style.display = 'flex';
-                    generarSelectorModelos();
-                }
-                renderizarClima(); 
+                selectedModel = (seccionActual === 'prueba') ? 'CONSENSO' : (selectedModel || 'OpenMeteo');
+                document.getElementById('model-selector-container').style.display = (seccionActual === 'prueba') ? 'none' : 'flex';
+                generarSelectorModelos();
+                renderizarClima();
             }
             document.getElementById('footer-sync').innerText = `Sync: ${rawData.metadata.actualizado} | Lote: ${rawData.metadata.lote}`;
         }
 
-        function obtenerDatosFiltrados(dataArray) {
-            if(!dataArray) return [];
-            return fechaFiltro === "all" ? dataArray : dataArray.filter(p => p.x.startsWith(fechaFiltro));
-        }
-
+        // --- RENDERIZADO (Aquí es donde aplicamos la traducción directa) ---
         function renderizarResumen() {
-            // Lluvia Diaria (Solucionado el problema del JSON)
-            charts.diario.updateOptions({ xaxis: { categories: rawData.diario.labels } });
-            charts.diario.updateSeries([{ name: 'Lluvia Media', data: rawData.diario.data }]);
+            // 1. Diario (Precipitación Acumulada)
+            charts.diario.data.labels = rawData.diario.labels.map(traducirDia);
+            charts.diario.data.datasets = [{ label: 'Lluvia (mm)', data: rawData.diario.data, backgroundColor: '#3b82f6', borderRadius: 5 }];
+            charts.diario.options.scales.x = { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10, weight: '600' }, autoSkip: false } };
+            charts.diario.update();
 
-            // Lluvia Horaria por Modelo
+            // 2. Horario
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-            const seriesLluvia = modelos.map(m => ({
-                name: m, 
-                data: obtenerDatosFiltrados(rawData.horario[m]).map(p => ({ x: new Date(p.x).getTime(), y: p.y > 0 ? p.y : null }))
-            }));
-            charts.horario.updateOptions({ colors: modelos.map(m => MODEL_COLORS[m] || '#fff') });
-            charts.horario.updateSeries(seriesLluvia);
+            const dRef = fechaFiltro === "all" ? rawData.horario['OpenMeteo'] : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
+            
+            // TRADUCCIÓN DIRECTA EN EL MAP: Esto es lo que hace que el tooltip salga bien
+            charts.horario.data.labels = dRef.map(p => {
+                const dt = new Date(p.x);
+                const labelIngles = `${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`;
+                return traducirDia(labelIngles);
+            });
 
-            actualizarKPIs(obtenerDatosFiltrados(rawData.horario['CONSENSO']));
+            charts.horario.data.datasets = modelos.map(m => ({
+                label: m,
+                data: (fechaFiltro === "all" ? rawData.horario[m] : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro))).map(p => p.y),
+                backgroundColor: MODEL_COLORS[m]
+            }));
+            charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
+            charts.horario.update();
+            actualizarKPIs(dRef);
         }
 
         function renderizarClima() {
-            const d = obtenerDatosFiltrados(rawData.horario[selectedModel]);
-            if(d.length === 0) return;
-
-            charts.temp.updateSeries([{ name: 'Temp', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.temp })) }, { name: 'Rocío', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.rocio })) }]);
-            charts.delta.updateSeries([{ name: 'Delta', data: d.map(p => ({ x: new Date(p.x).getTime(), y: parseFloat((p.temp - p.rocio).toFixed(1)) })) }]);
-            charts.hum.updateSeries([{ name: 'Hum', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.hum })) }]);
-            charts.viento.updateSeries([{ name: 'Viento', data: d.map(p => ({ x: new Date(p.x).getTime(), y: p.viento })) }]);
+            const d = fechaFiltro === "all" ? rawData.horario[selectedModel] : rawData.horario[selectedModel].filter(p => p.x.startsWith(fechaFiltro));
             
+            // TRADUCCIÓN DIRECTA EN EL MAP
+            const labelsTraducidos = d.map(p => {
+                const dt = new Date(p.x);
+                const labelIngles = `${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`;
+                return traducirDia(labelIngles);
+            });
+
+            const datasetBase = (label, data, color, fill = false) => ({
+                label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.3, pointRadius: 0
+            });
+
+            ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
+                charts[key].data.labels = labelsTraducidos;
+                if(key === 'temp') {
+                    charts[key].data.datasets = [datasetBase('Temp', d.map(p => p.temp), '#ef4444'), datasetBase('Rocío', d.map(p => p.rocio), '#06b6d4')];
+                } else if(key === 'delta') {
+                    charts[key].data.datasets = [datasetBase('Delta', d.map(p => (p.temp - p.rocio).toFixed(1)), '#f472b6', true)];
+                } else if(key === 'humedad') {
+                    charts[key].data.datasets = [datasetBase('Hum %', d.map(p => p.hum), '#10b981')];
+                } else if(key === 'viento') {
+                    charts[key].data.datasets = [datasetBase('Viento m/s', d.map(p => p.viento), '#8b5cf6')];
+                }
+                charts[key].options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
+                charts[key].update();
+            });
             actualizarKPIs(d);
         }
 
+        // --- HELPERS ---
         function actualizarKPIs(datos) {
-            if (!datos || datos.length === 0) return;
-            const temps = datos.map(p => p.temp), hums = datos.map(p => p.hum), vientos = datos.map(p => p.viento);
-            const deltas = datos.map(p => parseFloat((p.temp - p.rocio).toFixed(1)));
-            
+            if (!datos || !datos.length) return;
+            const temps = datos.map(p => p.temp), vientos = datos.map(p => p.viento);
+            const hums = datos.map(p => p.hum), deltas = datos.map(p => p.temp - p.rocio);
             document.getElementById('kpi-temp-max').innerText = Math.max(...temps).toFixed(1);
             document.getElementById('kpi-temp-min').innerText = Math.min(...temps).toFixed(1);
             document.getElementById('kpi-hum-max').innerText = Math.max(...hums).toFixed(0);
@@ -250,21 +305,32 @@
             document.getElementById('kpi-delta-min').innerText = Math.min(...deltas).toFixed(1);
         }
 
-        function verSeccion(sec) {
-            seccionActual = sec;
-            const tabs = ['resumen', 'aire', 'prueba'];
-            tabs.forEach(t => {
-                const btn = document.getElementById(`tab-${t}`);
-                btn.className = t === sec ? 
-                    'btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest' : 
-                    'btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest';
-                if(t === 'prueba' && t !== sec) btn.classList.add('text-blue-300'); // Mantener el tinte azul
+        function generarSelectorModelos() {
+            const container = document.getElementById('model-selector-container');
+            container.innerHTML = '';
+            Object.keys(rawData.horario).filter(m => m !== 'CONSENSO').forEach(m => {
+                const btn = document.createElement('button');
+                btn.innerText = m;
+                btn.className = `btn-model ${m === selectedModel ? 'btn-model-active' : ''}`;
+                btn.style.borderLeft = `4px solid ${MODEL_COLORS[m]}`;
+                btn.onclick = () => { selectedModel = m; actualizarPantalla(); };
+                container.appendChild(btn);
             });
-            actualizarPantalla();
-            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50);
         }
 
-        window.onload = () => { inicializarGraficos(); cambiarLote('elida.json'); };
+        function filtrarPorFecha(val) { fechaFiltro = val; resetAllZooms(); actualizarPantalla(); }
+
+        function verSeccion(sec) {
+            seccionActual = sec;
+            ['resumen', 'aire', 'prueba'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if(el) el.className = t === sec ? 'btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase' : 'btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase';
+            });
+            actualizarPantalla();
+        }
+
+        function resetAllZooms() { Object.values(charts).forEach(c => { if(c.resetZoom) c.resetZoom(); }); }
+        window.onload = inicializarApp; 
     </script>
 </body>
 </html>
