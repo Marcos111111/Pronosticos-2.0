@@ -57,11 +57,13 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         FROM pronosticos_full p
         JOIN modelos m ON p.modelo_id = m.id
         JOIN campos c ON p.campo_id = c.id
-        WHERE c.nombre = ?
+        WHERE c.nombre = ? 
+        -- Filtro 1: Solo datos desde hace 1 hora (por si querés ver el pasado inmediato) o desde YA
+        AND p.fecha_pronosticada >= datetime('now', '-1 hour', 'localtime')
+        -- Filtro 2: Asegurar que traemos solo la última versión de cada pronóstico
         AND p.id IN (
             SELECT MAX(id)
             FROM pronosticos_full
-            WHERE id > (SELECT MAX(id) FROM pronosticos_full) - 10000
             GROUP BY campo_id, modelo_id, fecha_pronosticada
         )
         ORDER BY p.fecha_pronosticada ASC
