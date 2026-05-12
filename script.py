@@ -13,7 +13,6 @@ def agregar_modelo_consenso(series_por_modelo):
     ref_key = max(series_por_modelo, key=lambda k: len(series_por_modelo[k]))
     referencia = series_por_modelo[ref_key]
     consenso = []
-
     for i in range(len(referencia)):
         fecha = referencia[i]['x']
         puntos = [series_por_modelo[m][i] for m in modelos if i < len(series_por_modelo[m])]
@@ -35,7 +34,6 @@ def actualizar_json(db_path):
     # Crear carpeta si no existe
     if not os.path.exists('web/data'):
         os.makedirs('web/data')
-
     for campo in CAMPOS:
         nombre = campo['nombre']
         # Generamos un nombre de archivo seguro (ej: data/elida.json)
@@ -51,7 +49,6 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
         query = """
         SELECT p.*, m.nombre as modelo_nombre
         FROM pronosticos_full p
@@ -160,4 +157,3 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         print(f"❌ Error procesando {campo_nombre}: {e}")
     finally:
         if conn: conn.close()
-    

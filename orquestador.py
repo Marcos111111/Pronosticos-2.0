@@ -51,6 +51,9 @@ def ejecutar_actualizacion():
             else:
                 print(f"⚠️ {nombre_mod} no devolvió datos.")
 
+        print("actualizando archivos json")
+        actualizar_json('monitoreo_agricola.db')
+
         fin_total = time.time()
         print("\n" + "="*50)
         print(f"✨ PROCESO FINALIZADO CON ÉXITO")
@@ -64,4 +67,3 @@ def ejecutar_actualizacion():
 
 if __name__ == "__main__":
     ejecutar_actualizacion()
-    actualizar_json('monitoreo_agricola.db')
