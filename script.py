@@ -157,3 +157,6 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         print(f"❌ Error procesando {campo_nombre}: {e}")
     finally:
         if conn: conn.close()
+
+if __name__ == "__main__":
+    actualizar_json("monitoreo_agricola.db")

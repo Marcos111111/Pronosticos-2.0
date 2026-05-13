@@ -249,26 +249,51 @@
         function renderizarResumen() {
             // 1. Diario (Precipitación Acumulada)
             charts.diario.data.labels = rawData.diario.labels.map(traducirDia);
-            charts.diario.data.datasets = [{ label: 'Lluvia (mm)', data: rawData.diario.data, backgroundColor: '#3b82f6', borderRadius: 5 }];
-            charts.diario.options.scales.x = { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10, weight: '600' }, autoSkip: false } };
+            charts.diario.data.datasets = [{ 
+                label: 'Lluvia (mm)', 
+                data: rawData.diario.data, 
+                backgroundColor: '#3b82f6', 
+                borderRadius: 5 
+            }];
             charts.diario.update();
 
-            // 2. Horario
+            // 2. Horario (El problema estaba aquí)
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-            const dRef = fechaFiltro === "all" ? rawData.horario['OpenMeteo'] : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
             
-            // TRADUCCIÓN DIRECTA EN EL MAP: Esto es lo que hace que el tooltip salga bien
-            charts.horario.data.labels = dRef.map(p => {
-                const dt = new Date(p.x);
-                const labelIngles = `${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`;
-                return traducirDia(labelIngles);
+            // Filtramos OpenMeteo para crear el eje de referencia
+            const dRef = fechaFiltro === "all" 
+                ? rawData.horario['OpenMeteo'] 
+                : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
+
+            // GENERACIÓN DE LABELS: Usamos un Map para vincular fecha ISO -> Etiqueta Traducida
+            const mapaEtiquetas = {};
+            const labelsParaEje = dRef.map(p => {
+                const dt = new Date(p.x.replace(' ', 'T')); // Reemplazo para asegurar compatibilidad
+                const labelTraducido = traducirDia(`${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`);
+                mapaEtiquetas[p.x] = labelTraducido; // Guardamos la relación: "2026-05-13 18:00" -> "Mié13 18:00"
+                return labelTraducido;
             });
 
-            charts.horario.data.datasets = modelos.map(m => ({
-                label: m,
-                data: (fechaFiltro === "all" ? rawData.horario[m] : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro))).map(p => p.y),
-                backgroundColor: MODEL_COLORS[m]
-            }));
+            charts.horario.data.labels = labelsParaEje;
+
+            // DATASETS: Vinculamos cada punto de SMN/MET a la etiqueta correcta
+            charts.horario.data.datasets = modelos.map(m => {
+                const datosBrutos = (fechaFiltro === "all" 
+                    ? rawData.horario[m] 
+                    : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro)));
+
+                return {
+                    label: m,
+                    backgroundColor: MODEL_COLORS[m],
+                    // Usamos parsing manual para que Chart.js no se pierda
+                    data: labelsParaEje.map(labelEje => {
+                        // Buscamos en el modelo actual el punto que coincida con esta etiqueta de tiempo
+                        const punto = datosBrutos.find(p => mapaEtiquetas[p.x] === labelEje);
+                        return punto ? punto.y : 0; // Si no hay dato para esa hora, ponemos 0
+                    })
+                };
+            });
+
             charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
             charts.horario.update();
             actualizarKPIs(dRef);
