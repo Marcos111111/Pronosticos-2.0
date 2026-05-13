@@ -115,26 +115,32 @@
             ticks: {
                 color: '#94a3b8',
                 font: { size: 10, weight: '600' },
-                autoSkip: false,
                 maxRotation: 0,
+                autoSkip: true,
+                autoSkipPadding: 10,
+                align: 'center',
                 callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value); // El label ya viene traducido
-                    
-                    if (isFiltered) {
-                        // Vista 1 día: 1 hora de por medio (cada 2 horas)
-                        const partes = label.split(' ');
-                        const hora = partes[partes.length - 1];
-                        const hInt = parseInt(hora.split(':')[0]);
-                        return (hInt % 2 === 0) ? hora : "";
+                    const label = this.getLabelForValue(value);
+                    const partes = label.split(' ');
+                    const diaId = partes[0];
+                    const hora = partes[partes.length - 1];
+
+                    // Si hay zoom o es vista de 1 día, mostramos horas
+                    if (isFiltered || this.chart.getZoomLevel?.() > 1.5) {
+                        return hora;
                     }
 
-                    // Vista 7 días: Solo el nombre del día al inicio de cada jornada
-                    const diaId = label.split(' ')[0];
-                    if (index > 0) {
-                        const prevLabel = this.getLabelForValue(values[index - 1].value);
-                        if (prevLabel.startsWith(diaId)) return "";
+                    // Para la vista de 7 días:
+                    // Si es el primer punto o cambió el día respecto al anterior, mostramos el día
+                    if (index === 0) return diaId;
+                    
+                    const prevLabel = this.getLabelForValue(values[index - 1].value);
+                    if (diaId !== prevLabel.split(' ')[0]) {
+                        return diaId;
                     }
-                    return diaId;
+
+                    // IMPORTANTE: Devolvemos undefined para que autoSkip no se confunda
+                    return undefined; 
                 }
             }
         });
