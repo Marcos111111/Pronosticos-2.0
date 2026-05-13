@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgroClima Pro - Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,7 +18,7 @@
         .btn-model { background: #1e293b; color: #94a3b8; font-size: 10px; font-weight: 800; padding: 8px 12px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; }
         .btn-model-active { color: white; background: #2563eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        canvas {touch-action: none; -webkit-user-select: none; user-select: none;}
+        canvas {touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none;}
     </style>
 </head>
 <body class="pb-10">
@@ -158,16 +159,16 @@
                 },
                 zoom: {
                     pan: {  enabled: true,
-                            mode: 'x',
-                            threshold: 10, 
+                        mode: 'x',
+                        modifierKey: null, 
                     },
                     zoom: {
-                        wheel: { enabled: true }, // Para PC
-                        pinch: { enabled: true }, // PARA CELULAR
+                        wheel: { enabled: true },
+                        pinch: { 
+                            enabled: true // ¡Esto ahora sí va a funcionar gracias a Hammer.js!
+                        },
                         mode: 'x',
-                        onZoomComplete: ({chart}) => {
-                            chart.update('none');
-                        }
+                        onZoomComplete: ({chart}) => chart.update('none')
                     }
                 }
             },
