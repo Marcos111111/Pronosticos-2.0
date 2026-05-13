@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgroClima Pro - Dashboard</title>
@@ -16,7 +17,7 @@
         .btn-model { background: #1e293b; color: #94a3b8; font-size: 10px; font-weight: 800; padding: 8px 12px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; }
         .btn-model-active { color: white; background: #2563eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        canvas { width: 100% !important; height: 250px !important; cursor: crosshair; }
+        canvas {touch-action: none; -webkit-user-select: none; user-select: none;}
     </style>
 </head>
 <body class="pb-10">
@@ -156,13 +157,17 @@
                     enabled: true // Al no poner callbacks, usa el label del eje X (que ya traducimos abajo)
                 },
                 zoom: {
-                    pan: { enabled: true, mode: 'x' },
+                    pan: {  enabled: true,
+                            mode: 'x',
+                            threshold: 10, 
+                    },
                     zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        drag: { enabled: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' },
+                        wheel: { enabled: true }, // Para PC
+                        pinch: { enabled: true }, // PARA CELULAR
                         mode: 'x',
-                        onZoomComplete: ({chart}) => chart.update('none')
+                        onZoomComplete: ({chart}) => {
+                            chart.update('none');
+                        }
                     }
                 }
             },
