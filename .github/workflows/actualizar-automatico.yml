@@ -37,5 +37,6 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -f monitoreo_agricola.db
+        git add web
         git commit -m "Actualización automática" || echo "Sin cambios"
         git push origin main
