@@ -105,9 +105,9 @@ class SMNProvider(WeatherProvider):
                         pp_acum_anterior[campo.id_db] = pp_total_actual
                         
                         # Cálculo de Punto de Rocío (Fórmula de Magnus)
-                        a, b = 17.27, 237.7
-                        alpha = ((a * temp) / (b + temp)) + np.log(hum/100.0)
-                        rocio = (b * alpha) / (a - alpha)
+                        b, c = 17.625, 243.04
+                        alpha = ((b * temp) / (c + temp)) + np.log(hum/100.0)
+                        rocio = (c * alpha) / (b - alpha)
 
                         # Crear objeto de datos unificado
                         if diff_dias >= 0:
