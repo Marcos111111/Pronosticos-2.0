@@ -195,7 +195,6 @@
                 minRotation: 0,
                 align: 'center',
                 autoSkip: true,
-                // Si es vista de 1 día, bajamos el padding para que entren MÁS horas juntas
                 autoSkipPadding: isFiltered ? 8 : 15, 
                 
                 callback: function(value, index, values) {
@@ -206,22 +205,28 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
-                    // --- TRUCO DEFINITIVO PARA LA SENSIBILIDAD ---
-                    // Modificamos las opciones de zoom en caliente usando la referencia nativa del gráfico
+                    // --- PLANCHAMOS LA SENSIBILIDAD EN CALIENTE ---
                     if (this.chart && this.chart.options.plugins.zoom) {
-                        this.chart.options.plugins.zoom.zoom.speed = isFiltered ? 0.005 : 0.03;
+                        const zoomOptions = this.chart.options.plugins.zoom.zoom;
+                        
+                        if (isFiltered) {
+                            zoomOptions.speed = 0.01;       // Velocidad baja estándar homologada
+                            zoomOptions.threshold = 100;    // ¡EL TRUCO! Tenés que estirar un montón los dedos para que reaccione
+                        } else {
+                            zoomOptions.speed = 0.03;       // Valores normales para 7 días
+                            zoomOptions.threshold = 0;      // Libre movimiento en la semana
+                        }
                     }
 
                     // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // Forzamos intervalos de 3 horas para tener mucho más detalle en pantalla
                         if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
                             return hora;
                         }
                         return undefined;
                     }
 
-                    // --- VISTA DE 7 DÍAS (INTACTA) ---
+                    // --- VISTA DE 7 DÍAS ---
                     const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
                     const esVistaGeneral = (puntosVisibles > 48);
                     
