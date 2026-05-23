@@ -119,30 +119,57 @@
                 if (chart.canvas.id === 'chart-diario') return;
 
                 const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-                
-                // Tomamos los ticks que el callback del eje X dejó pasar como válidos
-                const ticksActivos = x.getTicks();
-                if (!ticksActivos || ticksActivos.length === 0) return;
+                const labels = chart.data.labels;
+                if (!labels || labels.length === 0) return;
 
                 ctx.save();
                 
-                // Configuramos una línea de puntos nítida y visible sobre fondo oscuro
-                ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)'; 
-                ctx.lineWidth = 1.3;
-                ctx.setLineDash([4, 4]); 
+                const zoomActual = chart.getZoomLevel ? chart.getZoomLevel() : 1;
+                const isFiltered = chart.options.scales.x.isFiltered;
 
-                ticksActivos.forEach((tick) => {
-                    const xPos = x.getPixelForTick(tick.value);
-                    
-                    // Dibujamos la línea vertical de punta a punta solo si está en el área visible de la pantalla
+                // Recorremos la línea de tiempo real de los datos climáticos
+                for (let i = 0; i < labels.length; i++) {
+                    const label = labels[i];
+                    if (!label) continue;
+
+                    const partes = label.split(' ');
+                    const hora = partes[partes.length - 1];
+
+                    const xPos = x.getPixelForValue(i);
+
+                    // Solo dibujamos lo que cae dentro de la pantalla del celular actual (pan/zoom)
                     if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
-                        ctx.beginPath();
-                        ctx.moveTo(xPos, top);
-                        ctx.lineTo(xPos, bottom);
-                        ctx.stroke();
+                        
+                        // CASO A: VISTA GENERAL (Sin zoom) -> Línea vertical fija únicamente a las 00:00 hs
+                        if (!isFiltered && zoomActual <= 1.4) {
+                            if (hora === '00:00' || hora === '0:00') {
+                                ctx.beginPath();
+                                ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)'; // Slate-600 visible
+                                ctx.lineWidth = 1.3;
+                                ctx.setLineDash([4, 4]);
+                                ctx.moveTo(xPos, top);
+                                ctx.lineTo(xPos, bottom);
+                                ctx.stroke();
+                            }
+                        } 
+                        // CASO B: CON ZOOM (Intermedio/Máximo) o Filtro -> Activamos la cuadrícula de 6 horas
+                        else {
+                            if (/^(00|06|12|18):00$/.test(hora) || hora === '0:00') {
+                                ctx.beginPath();
+                                // Si es medianoche la hacemos un toque más sólida, si es hora intermedia más tenue
+                                ctx.strokeStyle = (hora === '00:00' || hora === '0:00') 
+                                    ? 'rgba(71, 85, 105, 0.70)' 
+                                    : 'rgba(71, 85, 105, 0.40)';
+                                
+                                ctx.lineWidth = 1.2;
+                                ctx.setLineDash([4, 4]);
+                                ctx.moveTo(xPos, top);
+                                ctx.lineTo(xPos, bottom);
+                                ctx.stroke();
+                            }
+                        }
                     }
-                });
-                
+                }
                 ctx.restore();
             }
         };
@@ -156,8 +183,8 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                autoSkip: true,       // Volvemos a prenderlo de forma nativa
-                autoSkipPadding: 15,  // Espacio para evitar colisiones entre horas y días
+                autoSkip: true,
+                autoSkipPadding: 20, // Evita colisiones de texto de forma elástica
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -169,31 +196,31 @@
 
                     const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
                     
-                    // Separamos el texto del día (ej: "Lun25" -> "Lun 25")
-                    const nombreDia = diaId.substring(0, 3); 
-                    const numeroDia = diaId.substring(3);    
-                    const etiquetaDia = `${nombreDia} ${numeroDia}`;
+                    const nombreDia = diaId.substring(0, 3); // "Mié"
+                    const numeroDia = diaId.substring(3);    // "27"
+                    const etiquetaDia = `${nombreDia} ${numeroDia}`; // "Mié 27"
 
-                    // REGLA 1: La medianoche (00:00) SIEMPRE se representa con el nombre del día, con o sin zoom
-                    if (hora === '00:00') {
-                        if (index === 0) return undefined; // Limpia el primer punto pegado al borde izquierdo
-                        
-                        // Solo mostramos el día la primera vez que detectamos el cambio de jornada
+                    // MODO VISTA GENERAL (Sin zoom)
+                    if (!isFiltered && zoomActual <= 1.4) {
+                        if (index === 0) return undefined;
                         const prevLabel = this.getLabelForValue(values[index - 1].value);
                         if (diaId !== prevLabel.split(' ')[0]) {
                             return etiquetaDia; 
                         }
+                        return undefined;
                     }
 
-                    // REGLA 2: Si el usuario metió ZOOM o filtró un día, habilitamos los intervalos de 6 horas
-                    if (isFiltered || zoomActual > 1.4) {
-                        // Solo permitimos que pasen las 06:00, 12:00 y 18:00
-                        if (/^(06|12|18):00$/.test(hora)) {
-                            return hora;
-                        }
+                    // MODO ZOOM (Intermedio o Avanzado) / FILTRO INDIVIDUAL
+                    // Si es la medianoche, mostramos el día de referencia para no perder la noción del tiempo
+                    if (hora === '00:00' || hora === '0:00') {
+                        return etiquetaDia; 
                     }
 
-                    // Cualquier otra hora intermedia se oculta para mantener el eje limpio
+                    // Para las horas intermedias, permitimos únicamente los saltos de 6 horas
+                    if (/^(06|12|18):00$/.test(hora)) {
+                        return hora;
+                    }
+
                     return undefined; 
                 }
             }
