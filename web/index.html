@@ -120,38 +120,37 @@
 
                 const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
                 
-                // Obtenemos los ticks exactos que Chart.js está renderizando en la pantalla en este milisegundo
+                // Obtenemos los ticks que Chart.js está renderizando activamente en pantalla
                 const ticksActivos = x.getTicks();
                 if (!ticksActivos || ticksActivos.length === 0) return;
 
                 ctx.save();
                 
                 ticksActivos.forEach((tick) => {
-                    // Obtenemos el texto exacto que se está mostrando abajo en el eje X
                     const etiquetaVisible = x.getLabelForValue(tick.value);
                     if (!etiquetaVisible) return;
 
                     const xPos = x.getPixelForTick(tick.value);
 
-                    // Verificamos que esté dentro del área visible del gráfico
+                    // Verificamos que el punto esté dentro del área visible del gráfico
                     if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
                         
-                        // REGLA 1: Si la etiqueta contiene un dos puntos (":"), es una HORA -> Línea Punteada
+                        // MODO ZOOM: Si la etiqueta contiene ":", es una HORA individual
                         if (etiquetaVisible.includes(':')) {
                             ctx.beginPath();
-                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)'; // Gris slate-600 sutil
+                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)'; // Slate-600 sutil
                             ctx.lineWidth = 1.2;
-                            ctx.setLineDash([4, 4]); // Patrón punteado visible
+                            ctx.setLineDash([4, 4]); // Líneas punteadas para las horas del zoom
                             ctx.moveTo(xPos, top);
                             ctx.lineTo(xPos, bottom);
                             ctx.stroke();
                         } 
-                        // REGLA 2: Si no tiene ":", es un TEXTO DE DÍA (ej: "Dom 24") -> Línea Continua de Medianoche
+                        // VISTA GENERAL: Si no tiene ":", es la etiqueta de INICIO DE DÍA (ej: "Dom 24")
                         else {
                             ctx.beginPath();
-                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.75)'; // Más sólida y brillante para separar días
-                            ctx.lineWidth = 1.8;
-                            ctx.setLineDash([]); // Línea continua pura
+                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)'; // Gris equilibrado
+                            ctx.lineWidth = 1.4;
+                            ctx.setLineDash([4, 4]); // ¡AHORA ES PUNTEADA! Al comienzo de cada día
                             ctx.moveTo(xPos, top);
                             ctx.lineTo(xPos, bottom);
                             ctx.stroke();
