@@ -119,52 +119,46 @@
                 if (chart.canvas.id === 'chart-diario') return;
 
                 const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-                const labels = chart.data.labels;
-                if (!labels || labels.length === 0) return;
+                
+                // Obtenemos los ticks exactos que Chart.js está renderizando en la pantalla en este milisegundo
+                const ticksActivos = x.getTicks();
+                if (!ticksActivos || ticksActivos.length === 0) return;
 
                 ctx.save();
                 
-                let ultimoDia = null;
+                ticksActivos.forEach((tick) => {
+                    // Obtenemos el texto exacto que se está mostrando abajo en el eje X
+                    const etiquetaVisible = x.getLabelForValue(tick.value);
+                    if (!etiquetaVisible) return;
 
-                for (let i = 0; i < labels.length; i++) {
-                    const label = labels[i];
-                    if (!label) continue;
+                    const xPos = x.getPixelForTick(tick.value);
 
-                    // Separamos el día y la hora. Ej: "Sáb23 18:00" -> diaId = "Sáb23", hora = "18:00"
-                    const partes = label.split(' ');
-                    const diaId = partes[0];
-                    const hora = partes[partes.length - 1];
-
-                    const xPos = x.getPixelForValue(i);
-                    
-                    // Verificamos que el punto esté adentro del área visible actual del gráfico (por el zoom/pan)
+                    // Verificamos que esté dentro del área visible del gráfico
                     if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
                         
-                        // 1. LÍNEA CONTINUA: Cambio de día (Apenas detecta que el identificador del día cambia)
-                        if (ultimoDia && diaId !== ultimoDia) {
+                        // REGLA 1: Si la etiqueta contiene un dos puntos (":"), es una HORA -> Línea Punteada
+                        if (etiquetaVisible.includes(':')) {
                             ctx.beginPath();
-                            ctx.strokeStyle = 'rgba(51, 65, 85, 0.8)'; // Slate-700 nítido
-                            ctx.lineWidth = 1.5;
-                            ctx.setLineDash([]); // Línea CONTINUA (vaciamos el patrón de puntos)
+                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)'; // Gris slate-600 sutil
+                            ctx.lineWidth = 1.2;
+                            ctx.setLineDash([4, 4]); // Patrón punteado visible
                             ctx.moveTo(xPos, top);
                             ctx.lineTo(xPos, bottom);
                             ctx.stroke();
                         } 
-                        
-                        // 2. LÍNEA PUNTEADA: Subdivisión de jornada (06:00, 12:00, 18:00)
-                        // Usamos regex para capturar exactamente esas horas al inicio del texto horario
-                        else if (/^(|06|12|18):00/.test(hora)) {
+                        // REGLA 2: Si no tiene ":", es un TEXTO DE DÍA (ej: "Dom 24") -> Línea Continua de Medianoche
+                        else {
                             ctx.beginPath();
-                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.60)'; // Más tenue para que no compita con el cambio de día
-                            ctx.lineWidth = 1.0;
-                            ctx.setLineDash([3, 4]); // Puntos chicos [largo_punto, espacio]
+                            ctx.strokeStyle = 'rgba(71, 85, 105, 0.75)'; // Más sólida y brillante para separar días
+                            ctx.lineWidth = 1.8;
+                            ctx.setLineDash([]); // Línea continua pura
                             ctx.moveTo(xPos, top);
                             ctx.lineTo(xPos, bottom);
                             ctx.stroke();
                         }
                     }
-                    ultimoDia = diaId;
-                }
+                });
+                
                 ctx.restore();
             }
         };
@@ -177,8 +171,8 @@
                 font: { size: 10, weight: '600' },
                 maxRotation: 0,
                 minRotation: 0,
-                autoSkip: true,       
-                autoSkipPadding: 24,  
+                autoSkip: true,       // Dejamos que maneje los espacios de forma elástica
+                autoSkipPadding: 28,  // Margen generoso para que nunca, bajo ningún concepto, se encimen los textos
                 align: 'center',
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -190,25 +184,23 @@
 
                     const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
 
-                    // --- REGLA DE TRANSMISIÓN CALIBRADA ---
-                    // Subimos el umbral a 1.8. Ahora necesitás estirar el gráfico de forma 
-                    // voluntaria y amplia para que recién ahí aparezcan las horas.
+                    // 1. MODO ZOOM O FILTRO: Prioridad total a las horas estructuradas por el autoSkip
                     if (isFiltered || zoomActual > 1.8) {
-                        return hora;
+                        return hora; // Retorna ej: "04:00", "12:00", "20:00" y el plugin les dibuja los puntos atrás
                     }
 
-                    // VISTA GENERAL DE 7 DÍAS (Entre zoom 1.0 y 1.8):
-                    // Ocultamos el primer día del eje para evitar colisiones contra el borde izquierdo
+                    // 2. VISTA GENERAL DE 7 DÍAS:
+                    // Ocultamos el día de arranque para evitar el choque contra el borde izquierdo
                     if (index === 0) return undefined;
 
                     const nombreDia = diaId.substring(0, 3); 
                     const numeroDia = diaId.substring(3);    
-                    const etiquetaFormateada = `${nombreDia} ${numeroDia}`; 
+                    const etiquetaFormateada = `${nombreDia} ${numeroDia}`; // Ej: "Lun 25"
 
-                    // Solo imprimimos el texto la primera vez que la hora del nuevo día cruza el eje
+                    // Entregamos la etiqueta del día solo en su primer punto horario disponible del eje
                     const prevLabel = this.getLabelForValue(values[index - 1].value);
                     if (diaId !== prevLabel.split(' ')[0]) {
-                        return etiquetaFormateada;
+                        return etiquetaFormateada; // Al retornar texto plano, el plugin sabe que es línea sólida
                     }
 
                     return undefined; 
