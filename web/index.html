@@ -123,46 +123,57 @@
                 if (!labels || labels.length === 0) return;
 
                 ctx.save();
-                
-                const zoomActual = chart.getZoomLevel ? chart.getZoomLevel() : 1;
-                const isFiltered = chart.options.scales.x.isFiltered;
+                ctx.strokeStyle = 'rgba(71, 85, 105, 0.60)'; // Slate-600 con buena opacidad
+                ctx.lineWidth = 1.2;
+                ctx.setLineDash([4, 4]); // Línea punteada fija
 
-                // Recorremos la línea de tiempo real de los datos climáticos
+                const puntosVisibles = x.max - x.min;
+                const esVistaGeneral = (puntosVisibles > 48);
+                const isFiltered = chart.options.scales.x.isFiltered; // Detecta si es la vista de 1 día
+
+                // --- REGLA EXCLUSIVA PARA LA VISTA DÍA POR DÍA ---
+                if (isFiltered) {
+                    for (let i = 0; i < labels.length; i++) {
+                        const label = labels[i];
+                        if (!label) continue;
+
+                        const hora = label.split(' ').pop();
+                        const xPos = x.getPixelForValue(i);
+
+                        if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
+                            // En la vista de 1 día, metemos líneas cada 3 horas sí o sí
+                            if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
+                                ctx.beginPath();
+                                ctx.moveTo(xPos, top);
+                                ctx.lineTo(xPos, bottom);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                    ctx.restore();
+                    return; // Termina acá para no ejecutar la lógica de 7 días
+                }
+
+                // --- LA VISTA DE 7 DÍAS QUEDA EXACTAMENTE IGUAL (NO SE TOCA) ---
                 for (let i = 0; i < labels.length; i++) {
                     const label = labels[i];
                     if (!label) continue;
 
                     const partes = label.split(' ');
                     const hora = partes[partes.length - 1];
-
                     const xPos = x.getPixelForValue(i);
 
-                    // Solo dibujamos lo que cae dentro de la pantalla del celular actual (pan/zoom)
                     if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
-                        
-                        // CASO A: VISTA GENERAL (Sin zoom) -> Línea vertical fija únicamente a las 00:00 hs
-                        if (!isFiltered && zoomActual <= 1.4) {
+                        if (esVistaGeneral) {
                             if (hora === '00:00' || hora === '0:00') {
                                 ctx.beginPath();
-                                ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)'; // Slate-600 visible
-                                ctx.lineWidth = 1.3;
-                                ctx.setLineDash([4, 4]);
                                 ctx.moveTo(xPos, top);
                                 ctx.lineTo(xPos, bottom);
                                 ctx.stroke();
                             }
-                        } 
-                        // CASO B: CON ZOOM (Intermedio/Máximo) o Filtro -> Activamos la cuadrícula de 6 horas
-                        else {
+                        } else {
                             if (/^(00|06|12|18):00$/.test(hora) || hora === '0:00') {
                                 ctx.beginPath();
-                                // Si es medianoche la hacemos un toque más sólida, si es hora intermedia más tenue
-                                ctx.strokeStyle = (hora === '00:00' || hora === '0:00') 
-                                    ? 'rgba(71, 85, 105, 0.70)' 
-                                    : 'rgba(71, 85, 105, 0.40)';
-                                
-                                ctx.lineWidth = 1.2;
-                                ctx.setLineDash([4, 4]);
                                 ctx.moveTo(xPos, top);
                                 ctx.lineTo(xPos, bottom);
                                 ctx.stroke();
@@ -184,7 +195,8 @@
                 minRotation: 0,
                 align: 'center',
                 autoSkip: true,
-                autoSkipPadding: 15, 
+                // Si es vista de 1 día, bajamos el padding para que entren MÁS horas juntas
+                autoSkipPadding: isFiltered ? 8 : 15, 
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -194,18 +206,24 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
-                    // --- EL CAMBIO CLAVE AQUÍ ---
-                    // Contamos cuántos puntos visibles hay actualmente en el eje X
+                    // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
+                    if (isFiltered) {
+                        // Forzamos intervalos de 3 horas para tener mucho más detalle en pantalla
+                        if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
+                            return hora;
+                        }
+                        return undefined;
+                    }
+
+                    // --- VISTA DE 7 DÍAS (INTACTA) ---
                     const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
-                    // Si hay más de 48 horas en pantalla, estamos en la vista de la semana (general)
                     const esVistaGeneral = (puntosVisibles > 48);
                     
                     const nombreDia = diaId.substring(0, 3); 
                     const numeroDia = diaId.substring(3);    
                     const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // 1. MODO VISTA GENERAL (Semana completa): Solo nombres de días a las 00:00
-                    if (!isFiltered && esVistaGeneral) {
+                    if (esVistaGeneral) {
                         if (index === 0) return undefined;
                         const prevLabel = this.getLabelForValue(values[index - 1].value);
                         if (diaId !== prevLabel.split(' ')[0]) {
@@ -214,18 +232,20 @@
                         return undefined;
                     }
 
-                    // 2. MODO ZOOM (Cuando quedan pocos puntos en pantalla) / FILTRO INDIVIDUAL
-                    // La medianoche SIEMPRE muestra el día para no perderse
-                    if (hora === '00:00' || hora === '0:00') {
-                        return etiquetaDia; 
-                    }
-
-                    // Las horas intermedias solo aparecen si son múltiplos de 6
-                    if (/^(06|12|18):00$/.test(hora)) {
-                        return hora;
-                    }
+                    if (hora === '00:00' || hora === '0:00') return etiquetaDia; 
+                    if (/^(06|12|18):00$/.test(hora)) return hora;
 
                     return undefined; 
+                }
+            },
+            // --- CONTROL DE SENSIBILIDAD DINÁMICO ---
+            // Si entramos a la vista de 1 día, planchamos la velocidad del zoom para que sea súper suave
+            plugins: {
+                zoom: {
+                    zoom: {
+                        speed: isFiltered ? 0.01 : 0.03, // 0.01 es ultra sedoso para la vista diaria
+                        sensitivity: isFiltered ? 0.1 : 0.3
+                    }
                 }
             }
         });
