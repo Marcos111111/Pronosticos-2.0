@@ -206,6 +206,12 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
+                    // --- TRUCO DEFINITIVO PARA LA SENSIBILIDAD ---
+                    // Modificamos las opciones de zoom en caliente usando la referencia nativa del gráfico
+                    if (this.chart && this.chart.options.plugins.zoom) {
+                        this.chart.options.plugins.zoom.zoom.speed = isFiltered ? 0.005 : 0.03;
+                    }
+
                     // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
                     if (isFiltered) {
                         // Forzamos intervalos de 3 horas para tener mucho más detalle en pantalla
@@ -236,16 +242,6 @@
                     if (/^(06|12|18):00$/.test(hora)) return hora;
 
                     return undefined; 
-                }
-            },
-            // --- CONTROL DE SENSIBILIDAD DINÁMICO ---
-            // Si entramos a la vista de 1 día, planchamos la velocidad del zoom para que sea súper suave
-            plugins: {
-                zoom: {
-                    zoom: {
-                        speed: isFiltered ? 0.01 : 0.03, // 0.01 es ultra sedoso para la vista diaria
-                        sensitivity: isFiltered ? 0.1 : 0.3
-                    }
                 }
             }
         });
