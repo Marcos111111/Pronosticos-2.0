@@ -184,7 +184,7 @@
                 minRotation: 0,
                 align: 'center',
                 autoSkip: true,
-                autoSkipPadding: 20, // Evita colisiones de texto de forma elástica
+                autoSkipPadding: 15, 
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -194,14 +194,18 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
-                    const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
+                    // --- EL CAMBIO CLAVE AQUÍ ---
+                    // Contamos cuántos puntos visibles hay actualmente en el eje X
+                    const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
+                    // Si hay más de 48 horas en pantalla, estamos en la vista de la semana (general)
+                    const esVistaGeneral = (puntosVisibles > 48);
                     
-                    const nombreDia = diaId.substring(0, 3); // "Mié"
-                    const numeroDia = diaId.substring(3);    // "27"
-                    const etiquetaDia = `${nombreDia} ${numeroDia}`; // "Mié 27"
+                    const nombreDia = diaId.substring(0, 3); 
+                    const numeroDia = diaId.substring(3);    
+                    const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // MODO VISTA GENERAL (Sin zoom)
-                    if (!isFiltered && zoomActual <= 1.4) {
+                    // 1. MODO VISTA GENERAL (Semana completa): Solo nombres de días a las 00:00
+                    if (!isFiltered && esVistaGeneral) {
                         if (index === 0) return undefined;
                         const prevLabel = this.getLabelForValue(values[index - 1].value);
                         if (diaId !== prevLabel.split(' ')[0]) {
@@ -210,13 +214,13 @@
                         return undefined;
                     }
 
-                    // MODO ZOOM (Intermedio o Avanzado) / FILTRO INDIVIDUAL
-                    // Si es la medianoche, mostramos el día de referencia para no perder la noción del tiempo
+                    // 2. MODO ZOOM (Cuando quedan pocos puntos en pantalla) / FILTRO INDIVIDUAL
+                    // La medianoche SIEMPRE muestra el día para no perderse
                     if (hora === '00:00' || hora === '0:00') {
                         return etiquetaDia; 
                     }
 
-                    // Para las horas intermedias, permitimos únicamente los saltos de 6 horas
+                    // Las horas intermedias solo aparecen si son múltiplos de 6
                     if (/^(06|12|18):00$/.test(hora)) {
                         return hora;
                     }
