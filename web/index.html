@@ -164,49 +164,66 @@
         };
 
         // --- CONFIGURACIÓN EJES X OPTIMIZADA ---
-        const getDynamicXConfig = (isFiltered) => ({
-            grid: { display: false },
-            ticks: {
-                color: '#94a3b8',
-                font: { size: 10, weight: '600' },
-                maxRotation: 0,
-                minRotation: 0,
-                autoSkip: true,       // Dejamos que maneje los espacios de forma elástica
-                autoSkipPadding: 28,  // Margen generoso para que nunca, bajo ningún concepto, se encimen los textos
-                align: 'center',
-                callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    if (!label) return undefined;
+        const getDynamicXConfig = (isFiltered) => {
+            // Detectamos el nivel de zoom actual antes de armar la configuración
+            // Nota: Necesitamos acceder al gráfico de alguna manera, si esta función no tiene 
+            // acceso directo a 'chart', Chart.js nos permite evaluar las propiedades dinámicamente:
+            
+            return {
+                grid: { display: false },
+                ticks: {
+                    color: '#94a3b8',
+                    font: { size: 10, weight: '600' },
+                    maxRotation: 0,
+                    minRotation: 0,
+                    autoSkipPadding: 15,
+                    align: 'center',
+                    
+                    // EL TRUCO DEFINITIVO: Cambiamos el comportamiento de autoSkip según el zoom
+                    autoSkip: function(context) {
+                        const chart = context.chart;
+                        const zoomActual = chart.getZoomLevel ? chart.getZoomLevel() : 1;
+                        // Si el usuario está viendo los 7 días (sin zoom), PROHIBIMOS que se saltee etiquetas (fuerza los días)
+                        // Si hay zoom o filtro de 1 día, activamos el skip para que regule las horas limpiamente
+                        return (isFiltered || zoomActual > 1.8);
+                    },
+                    
+                    callback: function(value, index, values) {
+                        const label = this.getLabelForValue(value);
+                        if (!label) return undefined;
 
-                    const partes = label.split(' ');
-                    const diaId = partes[0]; 
-                    const hora = partes[partes.length - 1]; 
+                        const partes = label.split(' ');
+                        const diaId = partes[0]; 
+                        const hora = partes[partes.length - 1]; 
 
-                    const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
+                        const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
 
-                    // 1. MODO ZOOM O FILTRO: Prioridad total a las horas estructuradas por el autoSkip
-                    if (isFiltered || zoomActual > 1.8) {
-                        return hora; // Retorna ej: "04:00", "12:00", "20:00" y el plugin les dibuja los puntos atrás
+                        // 1. MODO ZOOM O FILTRO DE UN DÍA: Mostramos las horas estructuradas
+                        if (isFiltered || zoomActual > 1.8) {
+                            return hora; 
+                        }
+
+                        // 2. VISTA GENERAL DE 7 DÍAS (Aquí autoSkip es FALSE gracias a la función de arriba):
+                        // Ocultamos el primer día del eje para evitar que se pegue al borde izquierdo
+                        if (index === 0) return undefined;
+
+                        const nombreDia = diaId.substring(0, 3); 
+                        const numeroDia = diaId.substring(3);    
+                        const etiquetaFormateada = `${nombreDia} ${numeroDia}`; 
+
+                        // Buscamos el cambio de día real en la data. 
+                        // Al estar el autoSkip apagado acá, pasaremos por CADA punto, 
+                        // así que imprimimos la etiqueta del día JUSTO en su primer hora disponible.
+                        const prevLabel = this.getLabelForValue(values[index - 1].value);
+                        if (diaId !== prevLabel.split(' ')[0]) {
+                            return etiquetaFormateada; 
+                        }
+
+                        return undefined; 
                     }
-
-                    // 2. VISTA GENERAL DE 7 DÍAS:
-                    // Ocultamos el día de arranque para evitar el choque contra el borde izquierdo
-                    if (index === 0) return undefined;
-
-                    const nombreDia = diaId.substring(0, 3); 
-                    const numeroDia = diaId.substring(3);    
-                    const etiquetaFormateada = `${nombreDia} ${numeroDia}`; // Ej: "Lun 25"
-
-                    // Entregamos la etiqueta del día solo en su primer punto horario disponible del eje
-                    const prevLabel = this.getLabelForValue(values[index - 1].value);
-                    if (diaId !== prevLabel.split(' ')[0]) {
-                        return etiquetaFormateada; // Al retornar texto plano, el plugin sabe que es línea sólida
-                    }
-
-                    return undefined; 
                 }
-            }
-        });
+            };
+        };
 
         // --- OPCIONES BASE ---
         const baseOptions = {
