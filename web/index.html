@@ -162,30 +162,37 @@
                 font: { size: 10, weight: '600' },
                 maxRotation: 0,
                 minRotation: 0,
-                autoSkip: true,
-                autoSkipPadding: 28, // Mayor separación física para hacer imposible la colisión
+                autoSkip: true,       // Habilitado para que el zoom dosifique las horas limpiamente
+                autoSkipPadding: 24,  // Espacio de seguridad en píxeles para evitar superposiciones
                 align: 'center',
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
                     if (!label) return undefined;
 
                     const partes = label.split(' ');
-                    const diaId = partes[0];
-                    const hora = partes[partes.length - 1];
+                    const diaId = partes[0]; // Ej: "Sáb23", "Dom24", "Lun25"
+                    const hora = partes[partes.length - 1]; // Ej: "18:00"
 
                     const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
 
-                    // Si hay zoom o se filtró un solo día, la prioridad es ver las horas
-                    if (isFiltered || zoomActual > 1.4) {
+                    // 1. SI HAY ZOOM O FILTRO: Mostramos las horas estructuradas por el autoSkip
+                    if (isFiltered || zoomActual > 1.3) {
                         return hora;
                     }
 
-                    // En vista de 7 días completa, mostramos el identificador del día únicamente al iniciar la jornada
-                    if (index === 0) return diaId;
-                    
+                    // 2. VISTA GENERAL DE 7 DÍAS:
+                    // Ocultamos el día actual (el primero de la lista) para que no genere superposición al inicio
+                    if (index === 0) return undefined;
+
+                    // Para los días siguientes, formateamos el texto agregando un espacio limpio
+                    const nombreDia = diaId.substring(0, 3); // "Lun"
+                    const numeroDia = diaId.substring(3);    // "25"
+                    const etiquetaFormateada = `${nombreDia} ${numeroDia}`; // "Lun 25"
+
+                    // Solo mostramos la etiqueta la primera vez que aparece el cambio de día en el eje
                     const prevLabel = this.getLabelForValue(values[index - 1].value);
                     if (diaId !== prevLabel.split(' ')[0]) {
-                        return diaId;
+                        return etiquetaFormateada;
                     }
 
                     return undefined; 
