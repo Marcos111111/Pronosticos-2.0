@@ -3,7 +3,6 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgroClima Pro - Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -111,29 +110,77 @@
             return res;
         }
 
-        // --- CONFIGURACIÓN EJES X ---
+
+
+        // --- PLUGIN: LÍNEAS PUNTEADAS DIVISORIAS DE DÍAS ---
+        const divisorDiasPlugin = {
+            id: 'divisorDias',
+            afterDraw: (chart) => {
+                if (chart.canvas.id === 'chart-diario') return;
+
+                const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+                const labels = chart.data.labels;
+                if (!labels || labels.length === 0) return;
+
+                ctx.save();
+                ctx.strokeStyle = 'rgba(51, 65, 85, 0.6)'; // Color slate-700
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 5]); // Línea punteada
+
+                let ultimoDia = null;
+
+                // Recorremos CADA punto de la data real
+                for (let i = 0; i < labels.length; i++) {
+                    const label = labels[i];
+                    if (!label) continue;
+
+                    const diaId = label.substring(0, 5); // "Vle22", "Sab23", etc.
+
+                    if (ultimoDia && diaId !== ultimoDia) {
+                        // Calculamos el pixel exacto en la pantalla para este índice de datos
+                        const xPos = x.getPixelForValue(i);
+                        
+                        // Solo dibujamos si está dentro de los límites visuales del gráfico
+                        if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
+                            ctx.beginPath();
+                            ctx.moveTo(xPos, top);
+                            ctx.lineTo(xPos, bottom);
+                            ctx.stroke();
+                        }
+                    }
+                    ultimoDia = diaId;
+                }
+                ctx.restore();
+            }
+        };
+
+        // --- CONFIGURACIÓN EJES X OPTIMIZADA ---
         const getDynamicXConfig = (isFiltered) => ({
             grid: { display: false },
             ticks: {
                 color: '#94a3b8',
                 font: { size: 10, weight: '600' },
                 maxRotation: 0,
+                minRotation: 0,
                 autoSkip: true,
-                autoSkipPadding: 10,
+                autoSkipPadding: 28, // Mayor separación física para hacer imposible la colisión
                 align: 'center',
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
+                    if (!label) return undefined;
+
                     const partes = label.split(' ');
                     const diaId = partes[0];
                     const hora = partes[partes.length - 1];
 
-                    // Si hay zoom o es vista de 1 día, mostramos horas
-                    if (isFiltered || this.chart.getZoomLevel?.() > 1.5) {
+                    const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
+
+                    // Si hay zoom o se filtró un solo día, la prioridad es ver las horas
+                    if (isFiltered || zoomActual > 1.4) {
                         return hora;
                     }
 
-                    // Para la vista de 7 días:
-                    // Si es el primer punto o cambió el día respecto al anterior, mostramos el día
+                    // En vista de 7 días completa, mostramos el identificador del día únicamente al iniciar la jornada
                     if (index === 0) return diaId;
                     
                     const prevLabel = this.getLabelForValue(values[index - 1].value);
@@ -141,32 +188,28 @@
                         return diaId;
                     }
 
-                    // IMPORTANTE: Devolvemos undefined para que autoSkip no se confunda
                     return undefined; 
                 }
             }
         });
 
-        // --- OPCIONES BASE (Lógica simplificada como el gráfico de barras) ---
+        // --- OPCIONES BASE ---
         const baseOptions = {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: { 
                 legend: { labels: { color: '#94a3b8', font: { size: 10, weight: '800' } } },
-                tooltip: {
-                    enabled: true // Al no poner callbacks, usa el label del eje X (que ya traducimos abajo)
-                },
+                tooltip: { enabled: true },
                 zoom: {
-                    pan: {  enabled: true,
+                    pan: {  
+                        enabled: true,
                         mode: 'x',
                         modifierKey: null, 
                     },
                     zoom: {
                         wheel: { enabled: true },
-                        pinch: { 
-                            enabled: true // ¡Esto ahora sí va a funcionar gracias a Hammer.js!
-                        },
+                        pinch: { enabled: true },
                         mode: 'x',
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
@@ -202,7 +245,8 @@
                 charts[key] = new Chart(document.getElementById(id), { 
                     type, 
                     data: { labels: [], datasets: [] }, 
-                    options: JSON.parse(JSON.stringify(baseOptions)) 
+                    options: JSON.parse(JSON.stringify(baseOptions)),
+                    plugins: [divisorDiasPlugin] // Inyectamos el plugin divisor a todos los gráficos
                 });
             });
 
@@ -245,7 +289,7 @@
             document.getElementById('footer-sync').innerText = `Sync: ${rawData.metadata.actualizado} | Lote: ${rawData.metadata.lote}`;
         }
 
-        // --- RENDERIZADO (Aquí es donde aplicamos la traducción directa) ---
+        // --- RENDERIZADO ---
         function renderizarResumen() {
             // 1. Diario (Precipitación Acumulada)
             charts.diario.data.labels = rawData.diario.labels.map(traducirDia);
@@ -257,26 +301,23 @@
             }];
             charts.diario.update();
 
-            // 2. Horario (El problema estaba aquí)
+            // 2. Horario Sincronizado
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
             
-            // Filtramos OpenMeteo para crear el eje de referencia
             const dRef = fechaFiltro === "all" 
                 ? rawData.horario['OpenMeteo'] 
                 : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
 
-            // GENERACIÓN DE LABELS: Usamos un Map para vincular fecha ISO -> Etiqueta Traducida
             const mapaEtiquetas = {};
             const labelsParaEje = dRef.map(p => {
-                const dt = new Date(p.x.replace(' ', 'T')); // Reemplazo para asegurar compatibilidad
+                const dt = new Date(p.x.replace(' ', 'T'));
                 const labelTraducido = traducirDia(`${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`);
-                mapaEtiquetas[p.x] = labelTraducido; // Guardamos la relación: "2026-05-13 18:00" -> "Mié13 18:00"
+                mapaEtiquetas[p.x] = labelTraducido;
                 return labelTraducido;
             });
 
             charts.horario.data.labels = labelsParaEje;
 
-            // DATASETS: Vinculamos cada punto de SMN/MET a la etiqueta correcta
             charts.horario.data.datasets = modelos.map(m => {
                 const datosBrutos = (fechaFiltro === "all" 
                     ? rawData.horario[m] 
@@ -285,11 +326,9 @@
                 return {
                     label: m,
                     backgroundColor: MODEL_COLORS[m],
-                    // Usamos parsing manual para que Chart.js no se pierda
                     data: labelsParaEje.map(labelEje => {
-                        // Buscamos en el modelo actual el punto que coincida con esta etiqueta de tiempo
                         const punto = datosBrutos.find(p => mapaEtiquetas[p.x] === labelEje);
-                        return punto ? punto.y : 0; // Si no hay dato para esa hora, ponemos 0
+                        return punto ? punto.y : 0;
                     })
                 };
             });
@@ -300,34 +339,61 @@
         }
 
         function renderizarClima() {
-            const d = fechaFiltro === "all" ? rawData.horario[selectedModel] : rawData.horario[selectedModel].filter(p => p.x.startsWith(fechaFiltro));
+            // El eje de tiempo maestro siempre se basa en OpenMeteo para mantener la consistencia horaria pura
+            const ejeReferenciaHoras = fechaFiltro === "all" 
+                ? rawData.horario['OpenMeteo'] 
+                : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
             
-            // TRADUCCIÓN DIRECTA EN EL MAP
-            const labelsTraducidos = d.map(p => {
-                const dt = new Date(p.x);
+            const datosModeloActual = rawData.horario[selectedModel];
+
+            // Traducimos las etiquetas horarias del eje maestro
+            const labelsTraducidos = ejeReferenciaHoras.map(p => {
+                const dt = new Date(p.x.replace(' ', 'T'));
                 const labelIngles = `${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`;
                 return traducirDia(labelIngles);
             });
 
             const datasetBase = (label, data, color, fill = false) => ({
-                label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.3, pointRadius: 0
+                label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.2, pointRadius: 0
             });
 
             ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
                 charts[key].data.labels = labelsTraducidos;
+                
                 if(key === 'temp') {
-                    charts[key].data.datasets = [datasetBase('Temp', d.map(p => p.temp), '#ef4444'), datasetBase('Rocío', d.map(p => p.rocio), '#06b6d4')];
+                    const dataTemp = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'temp'));
+                    const dataRocio = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'rocio'));
+                    
+                    charts[key].data.datasets = [
+                        datasetBase('Temp', dataTemp, '#ef4444'), 
+                        datasetBase('Rocío', dataRocio, '#06b6d4')
+                    ];
                 } else if(key === 'delta') {
-                    charts[key].data.datasets = [datasetBase('Delta', d.map(p => (p.temp - p.rocio).toFixed(1)), '#f472b6', true)];
+                    const dataDelta = ejeReferenciaHoras.map(p => {
+                        const t = obtenerDatoAproximado(datosModeloActual, p.x, 'temp');
+                        const r = obtenerDatoAproximado(datosModeloActual, p.x, 'rocio');
+                        return (t - r).toFixed(1);
+                    });
+                    charts[key].data.datasets = [datasetBase('Delta', dataDelta, '#f472b6', true)];
                 } else if(key === 'humedad') {
-                    charts[key].data.datasets = [datasetBase('Hum %', d.map(p => p.hum), '#10b981')];
+                    const dataHum = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'hum'));
+                    charts[key].data.datasets = [datasetBase('Hum %', dataHum, '#10b981')];
                 } else if(key === 'viento') {
-                    charts[key].data.datasets = [datasetBase('Viento m/s', d.map(p => p.viento), '#8b5cf6')];
+                    const dataViento = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'viento'));
+                    charts[key].data.datasets = [datasetBase('Viento m/s', dataViento, '#8b5cf6')];
                 }
+                
                 charts[key].options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
                 charts[key].update();
             });
-            actualizarKPIs(d);
+            
+            // Para los KPIs usamos el set de datos maestro mapeado para que no tire errores por falta de registros
+            actualizarKPIs(ejeReferenciaHoras.map(p => ({
+                temp: obtenerDatoAproximado(datosModeloActual, p.x, 'temp'),
+                rocio: obtenerDatoAproximado(datosModeloActual, p.x, 'rocio'),
+                hum: obtenerDatoAproximado(datosModeloActual, p.x, 'hum'),
+                viento: obtenerDatoAproximado(datosModeloActual, p.x, 'viento')
+            })));
         }
 
         // --- HELPERS ---
@@ -342,6 +408,53 @@
             document.getElementById('kpi-delta-min').innerText = Math.min(...deltas).toFixed(1);
         }
 
+        function obtenerDatoAproximado(datosBrutos, fechaObjetivo, variable) {
+            // Intentamos encontrar el punto exacto
+            const puntoExacto = datosBrutos.find(p => p.x === fechaObjetivo);
+            if (puntoExacto && puntoExacto[variable] !== undefined) {
+                return puntoExacto[variable];
+            }
+
+            // Si no existe el punto exacto (bache de MET Norway), aproximamos linealmente:
+            const tiempoObjetivo = new Date(fechaObjetivo.replace(' ', 'T')).getTime();
+            
+            // Buscamos el punto anterior más cercano y el posterior más cercano
+            let anterior = null;
+            let posterior = null;
+
+            for (let p of datosBrutos) {
+                const t = new Date(p.x.replace(' ', 'T')).getTime();
+                if (t <= tiempoObjetivo) {
+                    if (!anterior || t > new Date(anterior.x.replace(' ', 'T')).getTime()) {
+                        anterior = p;
+                    }
+                }
+                if (t >= tiempoObjetivo) {
+                    if (!posterior || t < new Date(posterior.x.replace(' ', 'T')).getTime()) {
+                        posterior = p;
+                    }
+                }
+            }
+
+            // Si encontramos ambos, hacemos una interpolación lineal simple
+            if (anterior && posterior && anterior[variable] !== undefined && posterior[variable] !== undefined) {
+                const tAnt = new Date(anterior.x.replace(' ', 'T')).getTime();
+                const tPost = new Date(posterior.x.replace(' ', 'T')).getTime();
+                
+                if (tPost === tAnt) return anterior[variable]; // Evitar división por cero
+                
+                const porcentaje = (tiempoObjetivo - tAnt) / (tPost - tAnt);
+                const valorAproximado = anterior[variable] + porcentaje * (posterior[variable] - anterior[variable]);
+                return valorAproximado;
+            }
+
+            // Si solo hay uno de los lados, devolvemos el que tengamos
+            if (anterior && anterior[variable] !== undefined) return anterior[variable];
+            if (posterior && posterior[variable] !== undefined) return posterior[variable];
+
+            return 0;
+        }
+        
         function generarSelectorModelos() {
             const container = document.getElementById('model-selector-container');
             container.innerHTML = '';
