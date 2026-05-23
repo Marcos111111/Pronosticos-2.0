@@ -119,43 +119,31 @@
                 if (chart.canvas.id === 'chart-diario') return;
 
                 const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-                const labels = chart.data.labels;
-                if (!labels || labels.length === 0) return;
+                
+                // Leemos estrictamente los ticks que Chart.js decidió renderizar y espaciar
+                const ticksActivos = x.getTicks();
+                if (!ticksActivos || ticksActivos.length === 0) return;
 
                 ctx.save();
                 
-                // Estilo de línea punteada de alto contraste para el fondo oscuro
-                ctx.strokeStyle = 'rgba(71, 85, 105, 0.65)'; 
-                ctx.lineWidth = 1.3;
+                // Color balanceado y trazo punteado elegante
+                ctx.strokeStyle = 'rgba(71, 85, 105, 0.60)'; 
+                ctx.lineWidth = 1.2;
                 ctx.setLineDash([4, 4]); 
 
                 const zoomActual = chart.getZoomLevel ? chart.getZoomLevel() : 1;
 
-                for (let i = 0; i < labels.length; i++) {
-                    const label = labels[i];
-                    if (!label) continue;
+                // Si estamos en la vista de 7 días, usamos la data maestra para clavar la línea a las 00:00 exactas
+                if (zoomActual <= 1.5 && !chart.options.scales.x.isFiltered) {
+                    const labels = chart.data.labels;
+                    for (let i = 0; i < labels.length; i++) {
+                        const label = labels[i];
+                        if (!label) continue;
 
-                    const partes = label.split(' ');
-                    const diaId = partes[0];
-                    const hora = partes[partes.length - 1];
-
-                    const xPos = x.getPixelForValue(i);
-
-                    // Solo dibujamos si el punto está en la pantalla del celular actual
-                    if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
-                        
-                        // MODO VISTA GENERAL: Línea de puntos ÚNICAMENTE a las 00:00 (Inicio de cada día)
-                        if (zoomActual <= 1.6 && !chart.options.scales.x.isFiltered) {
-                            if (hora === '00:00') {
-                                ctx.beginPath();
-                                ctx.moveTo(xPos, top);
-                                ctx.lineTo(xPos, bottom);
-                                ctx.stroke();
-                            }
-                        } 
-                        // MODO ZOOM / FILTRO INDIVIDUAL: Líneas de puntos CADA 3 HORAS exactas
-                        else {
-                            if (/^(|06|12|18):00$/.test(hora)) {
+                        const hora = label.split(' ').pop();
+                        if (hora === '00:00') {
+                            const xPos = x.getPixelForValue(i);
+                            if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
                                 ctx.beginPath();
                                 ctx.moveTo(xPos, top);
                                 ctx.lineTo(xPos, bottom);
@@ -163,7 +151,20 @@
                             }
                         }
                     }
+                } 
+                // MODO ZOOM: Dibujamos líneas de puntos ÚNICAMENTE detrás de las horas que sobrevivieron al filtro visual
+                else {
+                    ticksActivos.forEach((tick) => {
+                        const xPos = x.getPixelForTick(tick.value);
+                        if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
+                            ctx.beginPath();
+                            ctx.moveTo(xPos, top);
+                            ctx.lineTo(xPos, bottom);
+                            ctx.stroke();
+                        }
+                    });
                 }
+                
                 ctx.restore();
             }
         };
@@ -177,9 +178,14 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
+                autoSkipPadding: 30, // Margen de seguridad alto para que NUNCA se pisen las horas
                 
-                // APAGAMOS el autoSkip tradicional. Ahora nosotros gobernamos qué se muestra.
-                autoSkip: false, 
+                // Habilitamos autoSkip SOLO si hay zoom o filtro, para que limpie las horas amontonadas
+                autoSkip: function(context) {
+                    const chart = context.chart;
+                    const zoomActual = chart.getZoomLevel ? chart.getZoomLevel() : 1;
+                    return (isFiltered || zoomActual > 1.5);
+                },
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -191,24 +197,19 @@
 
                     const zoomActual = this.chart.getZoomLevel ? this.chart.getZoomLevel() : 1;
 
-                    // MODO A: DETALLE CON ZOOM (O FILTRO DE UN DÍA)
-                    // Mostramos referencias FIJAS cada 3 horas para no saturar la pantalla del celular
-                    if (isFiltered || zoomActual > 1.6) {
-                        if (/^(00|03|06|09|12|15|18|21):00$/.test(hora)) {
-                            return hora; // Retorna solo la hora limpia
-                        }
-                        return undefined;
+                    // MODO ZOOM: Retornamos la hora pura. El autoSkipPadding se encarga de que no se encimen.
+                    if (isFiltered || zoomActual > 1.5) {
+                        return hora; 
                     }
 
-                    // MODO B: VISTA GENERAL DE 7 DÍAS
-                    // Ocultamos el primer día para evitar que se pegue o se pise con el margen izquierdo
-                    if (index === 0) return undefined;
+                    // MODO VISTA GENERAL (7 DÍAS): 
+                    if (index === 0) return undefined; // Evita el choque del primer día a la izquierda
 
                     const nombreDia = diaId.substring(0, 3); 
                     const numeroDia = diaId.substring(3);    
                     const etiquetaFormateada = `${nombreDia} ${numeroDia}`; 
 
-                    // Imprimimos la etiqueta del día JUSTO a las 00:00 de cada jornada
+                    // Ponemos el nombre del día únicamente a la medianoche (00:00)
                     const prevLabel = this.getLabelForValue(values[index - 1].value);
                     if (diaId !== prevLabel.split(' ')[0]) {
                         return etiquetaFormateada; 
