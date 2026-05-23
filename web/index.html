@@ -123,26 +123,41 @@
                 if (!labels || labels.length === 0) return;
 
                 ctx.save();
-                ctx.strokeStyle = 'rgba(51, 65, 85, 0.6)'; // Color slate-700
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([5, 5]); // Línea punteada
-
+                
                 let ultimoDia = null;
 
-                // Recorremos CADA punto de la data real
                 for (let i = 0; i < labels.length; i++) {
                     const label = labels[i];
                     if (!label) continue;
 
-                    const diaId = label.substring(0, 5); // "Vle22", "Sab23", etc.
+                    // Separamos el día y la hora. Ej: "Sáb23 18:00" -> diaId = "Sáb23", hora = "18:00"
+                    const partes = label.split(' ');
+                    const diaId = partes[0];
+                    const hora = partes[partes.length - 1];
 
-                    if (ultimoDia && diaId !== ultimoDia) {
-                        // Calculamos el pixel exacto en la pantalla para este índice de datos
-                        const xPos = x.getPixelForValue(i);
+                    const xPos = x.getPixelForValue(i);
+                    
+                    // Verificamos que el punto esté adentro del área visible actual del gráfico (por el zoom/pan)
+                    if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
                         
-                        // Solo dibujamos si está dentro de los límites visuales del gráfico
-                        if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
+                        // 1. LÍNEA CONTINUA: Cambio de día (Apenas detecta que el identificador del día cambia)
+                        if (ultimoDia && diaId !== ultimoDia) {
                             ctx.beginPath();
+                            ctx.strokeStyle = 'rgba(51, 65, 85, 0.8)'; // Slate-700 nítido
+                            ctx.lineWidth = 1.5;
+                            ctx.setLineDash([]); // Línea CONTINUA (vaciamos el patrón de puntos)
+                            ctx.moveTo(xPos, top);
+                            ctx.lineTo(xPos, bottom);
+                            ctx.stroke();
+                        } 
+                        
+                        // 2. LÍNEA PUNTEADA: Subdivisión de jornada (06:00, 12:00, 18:00)
+                        // Usamos regex para capturar exactamente esas horas al inicio del texto horario
+                        else if (/^(06|12|18):00/.test(hora)) {
+                            ctx.beginPath();
+                            ctx.strokeStyle = 'rgba(51, 65, 85, 0.35)'; // Más tenue para que no compita con el cambio de día
+                            ctx.lineWidth = 1.0;
+                            ctx.setLineDash([3, 4]); // Puntos chicos [largo_punto, espacio]
                             ctx.moveTo(xPos, top);
                             ctx.lineTo(xPos, bottom);
                             ctx.stroke();
