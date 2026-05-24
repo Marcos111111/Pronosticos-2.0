@@ -194,7 +194,7 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                autoSkip: false, // Seguimos controlando el renderizado de forma manual
+                autoSkip: false, // Controlamos nosotros para que no borre info
 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -208,16 +208,18 @@
                     const numeroDia = diaId.substring(3);    
                     const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // --- VISTA DÍA POR DÍA (CORREGIDA) ---
+                    // --- VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // El primer punto disponible en pantalla SIEMPRE lleva el nombre del día
+                        // Al inicio del gráfico ponemos el día como ancla fija
                         if (index === 0) {
                             return etiquetaDia;
                         }
-                        // Para las demás horas, obligamos a pintar una etiqueta cada 3 puntos del gráfico.
-                        // Así nos aseguramos de que la pantalla se llene de horas de forma homogénea,
-                        // incluso si el día está incompleto o arranca al mediodía.
-                        if (index % 3 === 0) {
+                        // Si es la medianoche, mostramos el día
+                        if (hora === '00:00' || hora === '0:00') {
+                            return etiquetaDia;
+                        }
+                        // Mostramos estrictamente las horas cada 3 horas de reloj reales
+                        if (/^(03|06|09|12|15|18|21):00$/.test(hora)) {
                             return hora;
                         }
                         return undefined;
@@ -264,28 +266,15 @@
                         wheel: { enabled: true, speed: 0.05 },
                         pinch: { enabled: true },
                         mode: 'x',
+                        speed: 0.01,       // Velocidad de zoom ultra baja para que no salte
+                        sensitivity: 0.1,  // Fricción alta para el celular
                         
-                        // --- EL FRENO TÁCTIL ABSOLUTO ---
-                        onZoom: function({chart}) {
-                            const xAxis = chart.scales.x;
-                            const puntosVisibles = xAxis.max - xAxis.min;
-                            const isFiltered = chart.options.scales.x.isFiltered;
-
-                            // VISTA DÍA POR DÍA: Si el zoom baja de 16 puntos, forzamos la escala por software
-                            if (isFiltered && puntosVisibles < 16) {
-                                const centro = xAxis.min;
-                                // Forzamos un rango fijo de 16 horas usando el método del plugin
-                                chart.zoomScale('x', { min: centro, max: centro + 16 }, 'none');
-                                return false; 
-                            }
-                            
-                            // VISTA SEMANAL: Evitamos que hagan zoom infinito hacia adentro
-                            if (!isFiltered && puntosVisibles < 24) {
-                                const centro = xAxis.min;
-                                chart.zoomScale('x', { min: centro, max: centro + 24 }, 'none');
-                                return false;
-                            }
-                        },
+                        // --- EL FRENO DE MANO REAL ---
+                        // Si estás en la vista de 1 día (isFiltered), el rango mínimo visible se clava en 24 horas.
+                        // Esto significa que NO te va a dejar hacer zoom hacia adentro, eliminando la sensibilidad por completo.
+                        // Si estás en la vista de 7 días, te permite hacer zoom de hasta 24 horas.
+                        minRange: 24, 
+                        
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
                 }
