@@ -264,22 +264,38 @@
                         enabled: true,
                         mode: 'x',
                         modifierKey: null, 
-                        // Podés agregar velocidad al pan si sentís que al arrastrar se mueve rápido:
                         speed: 10, 
-                        threshold: 10 // Píxeles mínimos que tenés que mover el dedo para que empiece a arrastrar
+                        threshold: 10 
                     },
                     zoom: {
                         wheel: { 
                             enabled: true,
-                            speed: 0.05 // Suaviza el zoom si usás la ruedita del mouse en compu
+                            speed: 0.05 
                         },
                         pinch: { 
                             enabled: true 
                         },
                         mode: 'x',
-                        // --- AQUÍ ESTÁ EL TRUCO PARA EL CELULAR ---
-                        speed: 0.03,       // BAJAMOS LA VELOCIDAD (Por defecto es 0.1). Menor número = más suave y controlado.
-                        sensitivity: 0.3,  // Agrega fricción al gesto de pinza de los dedos en la pantalla.
+                        
+                        // --- AJUSTE DINÁMICO DE SENSIBILIDAD ---
+                        // Evaluamos los puntos en pantalla cada vez que el usuario apoya los dedos
+                        speed: function(context) {
+                            const chart = context.chart;
+                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
+                            
+                            // Si hay menos de 30 puntos (vista de 1 día), bajamos la velocidad a 0.002.
+                            // Si es la vista de 7 días, mantiene el 0.03 que te gustaba.
+                            return (puntosVisibles < 30) ? 0.002 : 0.03;
+                        },
+                        
+                        threshold: function(context) {
+                            const chart = context.chart;
+                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
+                            
+                            // En la vista diaria (menos de 30 puntos) le exigimos mover los dedos 
+                            // 120 píxeles para reaccionar. En la semanal, reacciona al instante (0).
+                            return (puntosVisibles < 30) ? 120 : 0;
+                        },
                         
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
