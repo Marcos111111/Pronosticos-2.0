@@ -194,7 +194,13 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                autoSkip: false, // Controlamos nosotros para que no borre info
+                
+                // --- EL CAMBIO CLAVE ---
+                // Si es la vista de 1 día, activamos el autoSkip pero con un margen mínimo (6 píxeles).
+                // Esto obliga a Chart.js a meter todas las horas que quepan físicamente en el celular,
+                // garantizando que veas la tarde (15:00, 18:00, 21:00...) etiquetada directamente en el eje.
+                autoSkip: true,
+                autoSkipPadding: isFiltered ? 6 : 15, 
 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -210,15 +216,11 @@
 
                     // --- VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // Al inicio del gráfico ponemos el día como ancla fija
-                        if (index === 0) {
+                        // El primer punto del gráfico siempre lleva el día para saber dónde estás parado
+                        if (index === 0 || hora === '00:00' || hora === '0:00') {
                             return etiquetaDia;
                         }
-                        // Si es la medianoche, mostramos el día
-                        if (hora === '00:00' || hora === '0:00') {
-                            return etiquetaDia;
-                        }
-                        // Mostramos estrictamente las horas cada 3 horas de reloj reales
+                        // Mostramos las horas en intervalos limpios de 3 horas de reloj reales
                         if (/^(03|06|09|12|15|18|21):00$/.test(hora)) {
                             return hora;
                         }
@@ -266,13 +268,12 @@
                         wheel: { enabled: true, speed: 0.05 },
                         pinch: { enabled: true },
                         mode: 'x',
-                        speed: 0.01,       // Velocidad de zoom ultra baja para que no salte
-                        sensitivity: 0.1,  // Fricción alta para el celular
+                        speed: 0.01,       // Velocidad baja controlada
+                        sensitivity: 0.1,  // Fricción táctil estable
                         
-                        // --- EL FRENO DE MANO REAL ---
-                        // Si estás en la vista de 1 día (isFiltered), el rango mínimo visible se clava en 24 horas.
-                        // Esto significa que NO te va a dejar hacer zoom hacia adentro, eliminando la sensibilidad por completo.
-                        // Si estás en la vista de 7 días, te permite hacer zoom de hasta 24 horas.
+                        // --- PISO DE ZOOM RÍGIDO ---
+                        // Bloquea el zoom en 24 horas para la vista diaria. No te va a dejar
+                        // romper la escala ni desplazar las horas al futuro de forma accidental.
                         minRange: 24, 
                         
                         onZoomComplete: ({chart}) => chart.update('none')
