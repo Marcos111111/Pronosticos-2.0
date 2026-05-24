@@ -194,7 +194,8 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                autoSkip: false, // APAGAMOS el skip de Chart.js. Ahora nosotros decidimos qué vive y qué muere.
+                // --- CONTROL TOTAL DE ETIQUETAS ---
+                autoSkip: false, // APAGAMOS el autoSkip para controlar nosotros el espacio.
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -208,43 +209,35 @@
                     const numeroDia = diaId.substring(3);    // Ej: "25"
                     const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // --- CASO A: VISTA DÍA POR DÍA (Filtrado) ---
+                    // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // En la vista de un día hay espacio de sobra: mostramos intervalos de 3 horas directos
-                        if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
+                        // En la vista diaria, mostramos el día solo en la medianoche (00:00).
+                        if (hora === '00:00') {
+                            return etiquetaDia; 
+                        }
+                        // PRIORIDAD ABSOLUTA: Forzamos etiquetas cada 3 horas para el ciclo completo.
+                        // Esto garantiza que aparezcan 03:00, 06:00, 09:00, etc.
+                        if (/^(03|06|09|12|15|18|21):00$/.test(hora)) {
                             return hora;
                         }
                         return undefined;
                     }
 
-                    // --- CASO B: VISTA SEMANAL (7 DÍAS) ---
+                    // --- VISTA DE 7 DÍAS (NO SE TOCA) ---
                     const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
+                    const esVistaGeneral = (puntosVisibles > 48);
                     
-                    // PRIORIDAD 1: Las medianoches (00:00) tienen INMUNIDAD TOTAL. No se ocultan nunca.
-                    if (hora === '00:00' || hora === '0:00') {
-                        if (index === 0) return undefined; // Limpia el borde izquierdo
-                        
+                    if (esVistaGeneral) {
+                        if (index === 0) return undefined;
                         const prevLabel = this.getLabelForValue(values[index - 1].value);
                         if (diaId !== prevLabel.split(' ')[0]) {
-                            return etiquetaDia; // Pintamos el día de referencia firme
+                            return etiquetaDia; 
                         }
+                        return undefined;
                     }
 
-                    // PRIORIDAD 2: Horas intermedias. Solo aparecen si el usuario metió ZOOM (pantalla estirada)
-                    // Si hay más de 48 puntos en pantalla (vista macro), no dejamos pasar NINGUNA hora intermedia.
-                    if (puntosVisibles > 48) {
-                        return undefined; 
-                    }
-
-                    // Si el usuario metió un zoom medio/avanzado, habilitamos las horas intermedias reguladas
-                    // Si el espacio es intermedio, metemos saltos de 12 horas, si abrió mucho, de 6 horas
-                    if (puntosVisibles > 24) {
-                        // Zoom medio: solo permitimos el mediodía ("12:00") para no saturar entre los días
-                        if (hora === '12:00') return hora;
-                    } else {
-                        // Zoom amplio: permitimos "06:00", "12:00" y "18:00"
-                        if (/^(06|12|18):00$/.test(hora)) return hora;
-                    }
+                    if (hora === '00:00') return etiquetaDia; 
+                    if (/^(06|12|18):00$/.test(hora)) return hora;
 
                     return undefined; 
                 }
@@ -271,14 +264,28 @@
                         wheel: { enabled: true, speed: 0.05 },
                         pinch: { enabled: true },
                         mode: 'x',
-                        speed: 0.02,       // Velocidad fija súper baja que el plugin SÍ acepta
-                        sensitivity: 0.1,  // Mucha fricción para que responda lento
-                        
+                        // --- AJUSTE DE SENSIBILIDAD DINÁMICO ---
+                        // Calculamos la velocidad y la fricción cada vez que el usuario toca la pantalla.
+                        speed: function(context) {
+                            const chart = context.chart;
+                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
+                            // Si hay pocos puntos (menos de 30), reducimos la velocidad a 0.005 para máxima suavidad.
+                            return (puntosVisibles < 30) ? 0.005 : 0.03;
+                        },
+                        sensitivity: function(context) {
+                            const chart = context.chart;
+                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
+                            // Incrementamos la fricción táctil (menos sensibilidad) en la vista diaria.
+                            return (puntosVisibles < 30) ? 0.05 : 0.3;
+                        },
                         // --- EL FRENO DE MANO ABSOLUTO ---
-                        // Evita que el usuario pueda hacer tanto zoom que rompa la pantalla. 
-                        // En vista de 1 día, el rango mínimo visible no puede ser menor a 18 horas de data.
-                        minRange: 18, 
-                        
+                        // Evita que el zoom se vuelva loco al establecer un rango mínimo visible.
+                        // En la vista diaria (menos de 24 horas), no permitimos un zoom de menos de 12 horas de datos.
+                        minRange: function(context) {
+                            const chart = context.chart;
+                            const isFiltered = chart.options.scales.x.isFiltered;
+                            return isFiltered ? 12 : 1; 
+                        },
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
                 }
