@@ -191,11 +191,11 @@
             ticks: {
                 color: '#94a3b8',
                 font: { size: 10, weight: '600' },
-                maxRotation: 45, // Lo rotamos un poco para que entren todas las horas sin pisarse en el celular
+                maxRotation: 45, // Rotamos las horas para que no colisionen en pantallas chicas
                 minRotation: 45,
                 align: 'center',
                 
-                // APAGAMOS EL AUTOSKIP: Chart.js está obligado a pintar todas las etiquetas
+                // APAGAMOS EL SALTO: Chart.js está obligado a pintar todas las horas del array
                 autoSkip: isFiltered ? false : true, 
 
                 callback: function(value, index, values) {
@@ -212,12 +212,11 @@
 
                     // --- VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // Si es el primer punto de la pantalla, ponemos el Día y la Hora juntos
+                        // El primer punto muestra el día para ubicarte
                         if (index === 0) {
                             return `${etiquetaDia} ${hora}`;
                         }
-                        // Para el resto de los puntos, devolvemos la hora cruda. 
-                        // Al estar autoSkip en false, va a imprimir TODAS las horas disponibles (19:00, 20:00, 21:00...)
+                        // Imprime absolutamente TODAS las horas siguientes (19:00, 20:00, 21:00...)
                         return hora;
                     }
 
@@ -363,9 +362,8 @@
             // 2. Horario Sincronizado
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
             
-            const dRef = fechaFiltro === "all" 
-                ? rawData.horario['OpenMeteo'] 
-                : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
+            // --- ACÁ APLICAMOS EL FILTRO ESTRICTO PARA EL EJE MAESTRO ---
+            const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo']);
 
             const mapaEtiquetas = {};
             const labelsParaEje = dRef.map(p => {
@@ -378,9 +376,8 @@
             charts.horario.data.labels = labelsParaEje;
 
             charts.horario.data.datasets = modelos.map(m => {
-                const datosBrutos = (fechaFiltro === "all" 
-                    ? rawData.horario[m] 
-                    : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro)));
+                // --- FILTRAMOS TAMBIÉN CADA MODELO INDIVIDUAL ---
+                const datosBrutos = obtenerDatosFiltrados(rawData.horario[m]);
 
                 return {
                     label: m,
@@ -394,15 +391,15 @@
 
             charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
             charts.horario.update();
+            
+            // Actualizamos los máximos y mínimos (KPIs) usando solo los datos futuros/actuales
             actualizarKPIs(dRef);
         }
 
         function renderizarClima() {
             // El eje de tiempo maestro siempre se basa en OpenMeteo para mantener la consistencia horaria pura
-            const ejeReferenciaHoras = fechaFiltro === "all" 
-                ? rawData.horario['OpenMeteo'] 
-                : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
-            
+            const ejeReferenciaHoras = obtenerDatosFiltrados(rawData.horario['OpenMeteo']);
+    
             const datosModeloActual = rawData.horario[selectedModel];
 
             // Traducimos las etiquetas horarias del eje maestro
@@ -456,6 +453,32 @@
         }
 
         // --- HELPERS ---
+        function obtenerDatosFiltrados(datosBrutos) {
+            // 1. Obtenemos la hora EXACTA de tu celular y le restamos 1 hora
+            const limiteHora = new Date();
+            limiteHora.setHours(limiteHora.getHours() - 1);
+            
+            // 2. Formateamos el día actual a 'YYYY-MM-DD' (usando tu zona horaria)
+            const año = limiteHora.getFullYear();
+            const mes = String(limiteHora.getMonth() + 1).padStart(2, '0');
+            const dia = String(limiteHora.getDate()).padStart(2, '0');
+            const hoyStr = `${año}-${mes}-${dia}`;
+
+            return datosBrutos.filter(p => {
+                // Convertimos el string del JSON a un objeto fecha de JS
+                const fechaPunto = new Date(p.x.replace(' ', 'T'));
+                
+                // VISTA GENERAL o VISTA DE HOY: Cortamos el pasado estricto
+                if (fechaFiltro === "all" || fechaFiltro === hoyStr) {
+                    const pasaFiltroHora = fechaPunto >= limiteHora;
+                    const pasaFiltroDia = fechaFiltro === "all" ? true : p.x.startsWith(fechaFiltro);
+                    return pasaFiltroHora && pasaFiltroDia;
+                }
+                
+                // SI ELIGIÓ EL DÍA DE MAÑANA (o futuro): Le mostramos las 24 horas intactas
+                return p.x.startsWith(fechaFiltro);
+            });
+        }
         function actualizarKPIs(datos) {
             if (!datos || !datos.length) return;
             const temps = datos.map(p => p.temp), vientos = datos.map(p => p.viento);

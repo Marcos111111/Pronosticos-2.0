@@ -1,7 +1,7 @@
 import json
 import os
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 from config import CAMPOS
 
@@ -9,7 +9,6 @@ def agregar_modelo_consenso(series_por_modelo):
     modelos = list(series_por_modelo.keys())
     if len(modelos) < 2: return series_por_modelo
     
-    # Usamos el modelo con más puntos como base
     ref_key = max(series_por_modelo, key=lambda k: len(series_por_modelo[k]))
     referencia = series_por_modelo[ref_key]
     consenso = []
@@ -31,33 +30,36 @@ def agregar_modelo_consenso(series_por_modelo):
     return series_por_modelo
 
 def actualizar_json(db_path):
-    # Crear carpeta si no existe
     if not os.path.exists('web/data'):
         os.makedirs('web/data')
     for campo in CAMPOS:
         nombre = campo['nombre']
-        # Generamos un nombre de archivo seguro (ej: data/elida.json)
         archivo_nombre = f"web/data/{nombre.lower()}.json"
-        
-        # Llamamos a la función que creamos antes
         exportar_dashboard_v2(db_path, nombre, archivo_nombre)
     
     print(f"✅ Se han actualizado {len(CAMPOS)} archivos de pronóstico.")
 
 def exportar_dashboard_v2(db_path, campo_nombre, output_path):
+    conn = None
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+
+        # --- CORRECCIÓN DE ZONA HORARIA ---
+        # Independizamos el código del reloj del servidor usando UTC puro y restando 3 horas para Argentina
+        ahora_utc = datetime.utcnow()
+        hace_una_hora_utc = (ahora_utc - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+        ahora_arg = ahora_utc - timedelta(hours=3)
+
         query = """
         SELECT p.*, m.nombre as modelo_nombre
         FROM pronosticos_full p
         JOIN modelos m ON p.modelo_id = m.id
         JOIN campos c ON p.campo_id = c.id
         WHERE c.nombre = ? 
-        -- Filtro 1: Solo datos desde hace 1 hora (por si querés ver el pasado inmediato) o desde YA
-        AND p.fecha_pronosticada >= datetime('now', '-1 hour', 'localtime')
-        -- Filtro 2: Asegurar que traemos solo la última versión de cada pronóstico
+        -- Inyectamos la hora calculada por Python en lugar de usar la de SQLite
+        AND p.fecha_pronosticada >= ?
         AND p.id IN (
             SELECT MAX(id)
             FROM pronosticos_full
@@ -66,7 +68,7 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         ORDER BY p.fecha_pronosticada ASC
         """
         
-        cursor.execute(query, (campo_nombre,))
+        cursor.execute(query, (campo_nombre, hace_una_hora_utc))
         filas = cursor.fetchall()
         
         if not filas:
@@ -78,8 +80,15 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
 
         for r in filas:
             mod = r['modelo_nombre']
-            fecha_str = r['fecha_pronosticada']
-            dia = fecha_str.split(' ')[0]
+            fecha_str_utc = r['fecha_pronosticada']
+            
+            # --- CONVERSIÓN A HORA LOCAL ANTES DE ENVIAR AL JSON ---
+            # Pasamos la hora UTC de la base de datos a hora Argentina
+            dt_utc = datetime.strptime(fecha_str_utc, '%Y-%m-%d %H:%M:%S')
+            dt_arg = dt_utc - timedelta(hours=3)
+            fecha_str_local = dt_arg.strftime('%Y-%m-%d %H:%M:%S')
+            
+            dia = fecha_str_local.split(' ')[0]
             
             lluvia = float(r['lluvia_mm'] or 0)
             temp = float(r['temp_c'] or 0)
@@ -90,8 +99,9 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             if mod not in series_por_modelo:
                 series_por_modelo[mod] = []
             
+            # Guardamos la fecha_str_local, ya corregida a tu horario
             series_por_modelo[mod].append({
-                "x": fecha_str,
+                "x": fecha_str_local,
                 "y": lluvia,
                 "temp": temp,
                 "rocio": rocio,
@@ -106,12 +116,9 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             
             acumulados_diarios_por_modelo[dia][mod] += lluvia
 
-        # --- NUEVO: INYECTAR MODELO CONSENSO ---
-        # Solo si tenemos al menos 2 modelos para promediar
         if len(series_por_modelo) > 1:
             series_por_modelo = agregar_modelo_consenso(series_por_modelo)
 
-        # --- CÁLCULO DE MÉTRICAS DE RESUMEN ---
         lista_dias = sorted(acumulados_diarios_por_modelo.keys())
         labels_diarios = []
         valores_diarios = []
@@ -123,8 +130,6 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             labels_diarios.append(fecha_dt.strftime('%a %d'))
             valores_diarios.append(round(promedio_dia, 1))
 
-        # --- CÁLCULO DE CERTEZA ---
-        # Excluimos 'CONSENSO' del cálculo de certeza para no sesgar el desvío estándar
         modelos_reales = [m for m in series_por_modelo.keys() if m != 'CONSENSO']
         totales_semanales = [sum(pt['y'] for pt in series_por_modelo[mod]) for mod in modelos_reales]
         
@@ -133,11 +138,11 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             cv = np.std(totales_semanales) / np.mean(totales_semanales)
             certeza = int(max(0, 100 - (cv * 100)))
 
-        # --- ENSAMBLADO FINAL ---
         json_final = {
             "metadata": {
                 "lote": campo_nombre,
-                "actualizado": datetime.now().strftime("%d/%m %H:%M"),
+                # Usamos la variable ahora_arg que tiene la hora real
+                "actualizado": ahora_arg.strftime("%d/%m %H:%M"),
                 "total_semana": round(sum(valores_diarios), 1),
                 "certeza": certeza
             },
