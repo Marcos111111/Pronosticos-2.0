@@ -191,16 +191,12 @@
             ticks: {
                 color: '#94a3b8',
                 font: { size: 10, weight: '600' },
-                maxRotation: 0,
-                minRotation: 0,
+                maxRotation: 45, // Lo rotamos un poco para que entren todas las horas sin pisarse en el celular
+                minRotation: 45,
                 align: 'center',
                 
-                // --- EL CAMBIO CLAVE ---
-                // Si es la vista de 1 día, activamos el autoSkip pero con un margen mínimo (6 píxeles).
-                // Esto obliga a Chart.js a meter todas las horas que quepan físicamente en el celular,
-                // garantizando que veas la tarde (15:00, 18:00, 21:00...) etiquetada directamente en el eje.
-                autoSkip: true,
-                autoSkipPadding: isFiltered ? 6 : 15, 
+                // APAGAMOS EL AUTOSKIP: Chart.js está obligado a pintar todas las etiquetas
+                autoSkip: isFiltered ? false : true, 
 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -216,15 +212,13 @@
 
                     // --- VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // El primer punto del gráfico siempre lleva el día para saber dónde estás parado
-                        if (index === 0 || hora === '00:00' || hora === '0:00') {
-                            return etiquetaDia;
+                        // Si es el primer punto de la pantalla, ponemos el Día y la Hora juntos
+                        if (index === 0) {
+                            return `${etiquetaDia} ${hora}`;
                         }
-                        // Mostramos las horas en intervalos limpios de 3 horas de reloj reales
-                        if (/^(03|06|09|12|15|18|21):00$/.test(hora)) {
-                            return hora;
-                        }
-                        return undefined;
+                        // Para el resto de los puntos, devolvemos la hora cruda. 
+                        // Al estar autoSkip en false, va a imprimir TODAS las horas disponibles (19:00, 20:00, 21:00...)
+                        return hora;
                     }
 
                     // --- VISTA SEMANAL (7 DÍAS) ---
