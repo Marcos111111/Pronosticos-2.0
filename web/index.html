@@ -194,8 +194,7 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                autoSkip: true,
-                autoSkipPadding: isFiltered ? 8 : 15, 
+                autoSkip: false, // APAGAMOS el skip de Chart.js. Ahora nosotros decidimos qué vive y qué muere.
                 
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
@@ -205,46 +204,47 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
-                    // --- PLANCHAMOS LA SENSIBILIDAD EN CALIENTE ---
-                    if (this.chart && this.chart.options.plugins.zoom) {
-                        const zoomOptions = this.chart.options.plugins.zoom.zoom;
-                        
-                        if (isFiltered) {
-                            zoomOptions.speed = 0.01;       // Velocidad baja estándar homologada
-                            zoomOptions.threshold = 100;    // ¡EL TRUCO! Tenés que estirar un montón los dedos para que reaccione
-                        } else {
-                            zoomOptions.speed = 0.03;       // Valores normales para 7 días
-                            zoomOptions.threshold = 0;      // Libre movimiento en la semana
-                        }
-                    }
+                    const nombreDia = diaId.substring(0, 3); // Ej: "Lun"
+                    const numeroDia = diaId.substring(3);    // Ej: "25"
+                    const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
+                    // --- CASO A: VISTA DÍA POR DÍA (Filtrado) ---
                     if (isFiltered) {
+                        // En la vista de un día hay espacio de sobra: mostramos intervalos de 3 horas directos
                         if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
                             return hora;
                         }
                         return undefined;
                     }
 
-                    // --- VISTA DE 7 DÍAS ---
+                    // --- CASO B: VISTA SEMANAL (7 DÍAS) ---
                     const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
-                    const esVistaGeneral = (puntosVisibles > 48);
                     
-                    const nombreDia = diaId.substring(0, 3); 
-                    const numeroDia = diaId.substring(3);    
-                    const etiquetaDia = `${nombreDia} ${numeroDia}`; 
-
-                    if (esVistaGeneral) {
-                        if (index === 0) return undefined;
+                    // PRIORIDAD 1: Las medianoches (00:00) tienen INMUNIDAD TOTAL. No se ocultan nunca.
+                    if (hora === '00:00' || hora === '0:00') {
+                        if (index === 0) return undefined; // Limpia el borde izquierdo
+                        
                         const prevLabel = this.getLabelForValue(values[index - 1].value);
                         if (diaId !== prevLabel.split(' ')[0]) {
-                            return etiquetaDia; 
+                            return etiquetaDia; // Pintamos el día de referencia firme
                         }
-                        return undefined;
                     }
 
-                    if (hora === '00:00' || hora === '0:00') return etiquetaDia; 
-                    if (/^(06|12|18):00$/.test(hora)) return hora;
+                    // PRIORIDAD 2: Horas intermedias. Solo aparecen si el usuario metió ZOOM (pantalla estirada)
+                    // Si hay más de 48 puntos en pantalla (vista macro), no dejamos pasar NINGUNA hora intermedia.
+                    if (puntosVisibles > 48) {
+                        return undefined; 
+                    }
+
+                    // Si el usuario metió un zoom medio/avanzado, habilitamos las horas intermedias reguladas
+                    // Si el espacio es intermedio, metemos saltos de 12 horas, si abrió mucho, de 6 horas
+                    if (puntosVisibles > 24) {
+                        // Zoom medio: solo permitimos el mediodía ("12:00") para no saturar entre los días
+                        if (hora === '12:00') return hora;
+                    } else {
+                        // Zoom amplio: permitimos "06:00", "12:00" y "18:00"
+                        if (/^(06|12|18):00$/.test(hora)) return hora;
+                    }
 
                     return undefined; 
                 }
@@ -268,34 +268,16 @@
                         threshold: 10 
                     },
                     zoom: {
-                        wheel: { 
-                            enabled: true,
-                            speed: 0.05 
-                        },
-                        pinch: { 
-                            enabled: true 
-                        },
+                        wheel: { enabled: true, speed: 0.05 },
+                        pinch: { enabled: true },
                         mode: 'x',
+                        speed: 0.02,       // Velocidad fija súper baja que el plugin SÍ acepta
+                        sensitivity: 0.1,  // Mucha fricción para que responda lento
                         
-                        // --- AJUSTE DINÁMICO DE SENSIBILIDAD ---
-                        // Evaluamos los puntos en pantalla cada vez que el usuario apoya los dedos
-                        speed: function(context) {
-                            const chart = context.chart;
-                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
-                            
-                            // Si hay menos de 30 puntos (vista de 1 día), bajamos la velocidad a 0.002.
-                            // Si es la vista de 7 días, mantiene el 0.03 que te gustaba.
-                            return (puntosVisibles < 30) ? 0.002 : 0.03;
-                        },
-                        
-                        threshold: function(context) {
-                            const chart = context.chart;
-                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
-                            
-                            // En la vista diaria (menos de 30 puntos) le exigimos mover los dedos 
-                            // 120 píxeles para reaccionar. En la semanal, reacciona al instante (0).
-                            return (puntosVisibles < 30) ? 120 : 0;
-                        },
+                        // --- EL FRENO DE MANO ABSOLUTO ---
+                        // Evita que el usuario pueda hacer tanto zoom que rompa la pantalla. 
+                        // En vista de 1 día, el rango mínimo visible no puede ser menor a 18 horas de data.
+                        minRange: 18, 
                         
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
@@ -303,7 +285,7 @@
             },
             scales: {
                 y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-                x: getDynamicXConfig(false)
+                x: getDynamicXConfig(false) // Mantenemos la llamada a tu función
             }
         };
 
