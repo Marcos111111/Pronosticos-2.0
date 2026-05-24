@@ -194,9 +194,8 @@
                 maxRotation: 0,
                 minRotation: 0,
                 align: 'center',
-                // --- CONTROL TOTAL DE ETIQUETAS ---
-                autoSkip: false, // APAGAMOS el autoSkip para controlar nosotros el espacio.
-                
+                autoSkip: false, // Rompemos el skip automático de Chart.js para mandar nosotros
+
                 callback: function(value, index, values) {
                     const label = this.getLabelForValue(value);
                     if (!label) return undefined;
@@ -205,25 +204,24 @@
                     const diaId = partes[0]; 
                     const hora = partes[partes.length - 1]; 
 
-                    const nombreDia = diaId.substring(0, 3); // Ej: "Lun"
-                    const numeroDia = diaId.substring(3);    // Ej: "25"
+                    const nombreDia = diaId.substring(0, 3); 
+                    const numeroDia = diaId.substring(3);    
                     const etiquetaDia = `${nombreDia} ${numeroDia}`; 
 
-                    // --- REGLA EXCLUSIVA VISTA DÍA POR DÍA ---
+                    // --- VISTA DÍA POR DÍA ---
                     if (isFiltered) {
-                        // En la vista diaria, mostramos el día solo en la medianoche (00:00).
-                        if (hora === '00:00') {
-                            return etiquetaDia; 
+                        // Al principio del gráfico (sea la hora que sea) ponemos el día de ancla
+                        if (index === 0 || hora === '00:00' || hora === '0:00') {
+                            return etiquetaDia;
                         }
-                        // PRIORIDAD ABSOLUTA: Forzamos etiquetas cada 3 horas para el ciclo completo.
-                        // Esto garantiza que aparezcan 03:00, 06:00, 09:00, etc.
+                        // Forzamos que se impriman SÍ O SÍ cada 3 horas limpias
                         if (/^(03|06|09|12|15|18|21):00$/.test(hora)) {
                             return hora;
                         }
                         return undefined;
                     }
 
-                    // --- VISTA DE 7 DÍAS (NO SE TOCA) ---
+                    // --- VISTA SEMANAL (7 DÍAS) ---
                     const puntosVisibles = this.chart.scales.x.max - this.chart.scales.x.min;
                     const esVistaGeneral = (puntosVisibles > 48);
                     
@@ -236,7 +234,7 @@
                         return undefined;
                     }
 
-                    if (hora === '00:00') return etiquetaDia; 
+                    if (hora === '00:00' || hora === '0:00') return etiquetaDia; 
                     if (/^(06|12|18):00$/.test(hora)) return hora;
 
                     return undefined; 
@@ -264,35 +262,37 @@
                         wheel: { enabled: true, speed: 0.05 },
                         pinch: { enabled: true },
                         mode: 'x',
-                        // --- AJUSTE DE SENSIBILIDAD DINÁMICO ---
-                        // Calculamos la velocidad y la fricción cada vez que el usuario toca la pantalla.
-                        speed: function(context) {
-                            const chart = context.chart;
-                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
-                            // Si hay pocos puntos (menos de 30), reducimos la velocidad a 0.005 para máxima suavidad.
-                            return (puntosVisibles < 30) ? 0.005 : 0.03;
-                        },
-                        sensitivity: function(context) {
-                            const chart = context.chart;
-                            const puntosVisibles = chart.scales.x.max - chart.scales.x.min;
-                            // Incrementamos la fricción táctil (menos sensibilidad) en la vista diaria.
-                            return (puntosVisibles < 30) ? 0.05 : 0.3;
-                        },
-                        // --- EL FRENO DE MANO ABSOLUTO ---
-                        // Evita que el zoom se vuelva loco al establecer un rango mínimo visible.
-                        // En la vista diaria (menos de 24 horas), no permitimos un zoom de menos de 12 horas de datos.
-                        minRange: function(context) {
-                            const chart = context.chart;
+                        
+                        // --- EL BLOQUEO INFRANQUEABLE DE SENSIVILIDAD ---
+                        onZoom: function({chart}) {
+                            const xAxis = chart.scales.x;
+                            const puntosVisibles = xAxis.max - xAxis.min;
                             const isFiltered = chart.options.scales.x.isFiltered;
-                            return isFiltered ? 2 : 1; 
+
+                            // SI ES LA VISTA DE UN DÍA: No permitimos que se achique a menos de 16 horas
+                            if (isFiltered && puntosVisibles < 16) {
+                                chart.options.scales.x.min = xAxis.min;
+                                chart.options.scales.x.max = xAxis.min + 16;
+                                chart.update('none');
+                                return false; // Cancela el zoom violento
+                            }
+                            
+                            // SI ES LA VISTA SE SEMANA: No dejamos que rompa la escala metiendo zoom infinito
+                            if (!isFiltered && puntosVisibles < 24) {
+                                chart.options.scales.x.min = xAxis.min;
+                                chart.options.scales.x.max = xAxis.min + 24;
+                                chart.update('none');
+                                return false;
+                            }
                         },
+
                         onZoomComplete: ({chart}) => chart.update('none')
                     }
                 }
             },
             scales: {
                 y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-                x: getDynamicXConfig(false) // Mantenemos la llamada a tu función
+                x: getDynamicXConfig(false)
             }
         };
 
