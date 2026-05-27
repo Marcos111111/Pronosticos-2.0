@@ -186,45 +186,36 @@
         };
 
         // --- CONFIGURACIÓN EJES X OPTIMIZADA ---
-        const getDynamicXConfig = (isFiltered) => ({
-            grid: {
-                display: true,
-                // Dibuja una línea de fondo solo cada 3 horas (el resto invisibles)
-                color: (context) => (context.index % 3 === 0 ? '#475569' : 'transparent'),
-                borderDash: [5, 5], // Línea punteada
-                drawBorder: true
-            },
-            ticks: {
-                color: '#94a3b8',
-                font: { size: 10, weight: '600' },
-                maxRotation: 45,
-                minRotation: 45,
-                align: 'center',
-                autoSkip: false, // Forzamos a no saltar erráticamente
-                callback: function(value, index, values) {
-                    // EFECTO "APARECER DE A POCO": Solo renderizamos el texto cada 3 horas
-                    if (index % 3 !== 0) return undefined;
-
-                    const label = this.getLabelForValue(value);
-                    if (!label) return undefined;
-
-                    // Extraemos la hora (siempre es lo último después del último espacio)
-                    const partes = label.split(' ');
-                    const hora = partes[partes.length - 1]; // ej: "10:00:00"
-                    const etiquetaDia = partes.slice(0, partes.length - 1).join(' '); // ej: "Mié 27"
-
-                    // --- VISTA DÍA POR DÍA ---
-                    if (isFiltered) {
-                        if (index === 0) return `${etiquetaDia} ${hora}`;
-                        return hora;
+        function getDynamicXConfig(isFiltered) {
+            return {
+                grid: {
+                    display: true,
+                    // Dibuja la línea vertical de fondo únicamente cada 3 horas
+                    color: (context) => (context.index % 3 === 0 ? '#475569' : 'transparent'),
+                    borderDash: [5, 5], // Formato punteado
+                    drawBorder: true
+                },
+                ticks: {
+                    maxRotation: 45,
+                    minRotation: 45,
+                    autoSkip: false, // Evitamos que Chart.js rompa el espaciado
+                    callback: function(value, index) {
+                        // Filtro visual: Solo mostramos texto cada 3 horas
+                        if (index % 3 !== 0) return '';
+                        
+                        const labelCompleto = this.getLabelForValue(value); // Ej: "Mar 26 21:00"
+                        if (!labelCompleto) return '';
+                        
+                        const partes = labelCompleto.split(' ');
+                        const diaTexto = `${partes[0]} ${partes[1]}`;
+                        const horaTexto = partes[2];
+                        
+                        // Si la hora es la medianoche, muestra el cambio de día, si no la hora
+                        return (horaTexto === '00:00') ? diaTexto : horaTexto;
                     }
-
-                    // --- VISTA SEMANAL (7 DÍAS) ---
-                    if (hora.startsWith('00:00')) return etiquetaDia; 
-                    return hora;
                 }
-            }
-        });
+            };
+        }
 
         // --- OPCIONES BASE ---
         const baseOptions = {
@@ -318,28 +309,30 @@
 
         function poblarSelectorFechas() {
             const select = document.getElementById('selector-fecha');
+            if (!select) return;
             select.innerHTML = '<option value="all">Próximos 7 días</option>';
             
-            // Obtenemos el inicio del día de hoy (miércoles 27 en este caso)
             const hoy = new Date();
             hoy.setHours(0, 0, 0, 0);
 
             const mKey = Object.keys(rawData.horario)[0];
-            
-            // Filtramos los días únicos y descartamos los que sean anteriores a hoy
-            const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))]
-                .filter(f => {
-                    const fechaDia = new Date(f + "T00:00:00");
-                    return fechaDia >= hoy;
-                });
+            if (!mKey || !rawData.horario[mKey]) return;
+
+            const fechasRaw = rawData.horario[mKey].map(p => p.x.split(' ')[0]);
+            const diasUnicos = [...new Set(fechasRaw)].sort();
+            const mapaDias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
             diasUnicos.forEach(f => {
-                const d = new Date(f + "T12:00:00");
-                const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                const opt = document.createElement('option');
-                opt.value = f; 
-                opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
-                select.appendChild(opt);
+                const partes = f.split('-'); 
+                const fechaDia = new Date(partes[0], partes[1] - 1, partes[2]);
+                
+                // Incluye el día si es hoy, a futuro, o si contiene las primeras horas del JSON
+                if (fechaDia >= hoy || f === fechasRaw[0]) {
+                    const opt = document.createElement('option');
+                    opt.value = f; 
+                    opt.innerText = `${mapaDias[fechaDia.getDay()]} ${fechaDia.getDate()}`;
+                    select.appendChild(opt);
+                }
             });
         }
 
@@ -360,40 +353,38 @@
 
         // --- RENDERIZADO ---
         function renderizarResumen() {
-            // --- 1. ARREGLO DEL GRÁFICO DIARIO (BARRAS DE PRECIPITACIÓN) ---
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
+            // --- 1. GRÁFICO DIARIO (BARRAS DE PRECIPITACIÓN) ---
+            const mapaDias = { 'Sun': 'Dom', 'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb' };
             
-            // Leemos el nuevo formato del JSON (YYYY-MM-DD) y lo convertimos a fecha local segura
-            const datosDiariosFiltrados = rawData.diario.labels.map((fechaStr, index) => {
-                const partes = fechaStr.split('-'); // [2026, 05, 27]
-                const dateObj = new Date(partes[0], partes[1] - 1, partes[2]);
-                return {
-                    valor: rawData.diario.data[index],
-                    dateObj: dateObj
-                };
-            }).filter(item => item.dateObj >= hoy);
+            // Traducimos los labels del JSON ("Wed 27" -> "Mié 27") para el eje X
+            charts.diario.data.labels = rawData.diario.labels.map(l => {
+                const partes = l.split(' ');
+                const engDia = partes[0];
+                const numDia = partes[1];
+                return mapaDias[engDia] ? `${mapaDias[engDia]} ${numDia}` : l;
+            }); 
 
-            const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            // Generamos las etiquetas limpias para el eje X (ej: "Mié 27")
-            charts.diario.data.labels = datosDiariosFiltrados.map(d => `${diasSemana[d.dateObj.getDay()]} ${d.dateObj.getDate()}`);
             charts.diario.data.datasets = [{ 
                 label: 'Lluvia (mm)', 
-                data: datosDiariosFiltrados.map(d => d.valor), 
+                data: rawData.diario.data, 
                 backgroundColor: '#3b82f6', 
                 borderRadius: 5 
             }];
             charts.diario.update();
 
-            // --- 2. ARREGLO DEL GRÁFICO HORARIO SINCRONIZADO ---
+            // --- 2. GRÁFICO HORARIO COMPARATIVO ---
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-            const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo']);
+            const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo'] || rawData.horario[modelos[0]]);
 
-            // Generamos los nombres para el eje visual recortando los segundos de la hora
+            // Generamos las etiquetas del eje combinando Día + Hora de forma limpia
             const labelsParaEje = dRef.map(p => {
-                const dt = new Date(p.x.replace(' ', 'T'));
-                const horaLimpia = p.x.split(' ')[1].substring(0, 5); // Pasa de "10:00:00" a "10:00"
-                return traducirDia(`${dt.toLocaleDateString('en-US', {weekday:'short'})} ${dt.getDate()} ${horaLimpia}`);
+                const [fecha, hora] = p.x.split(' ');
+                const [ano, mes, dia] = fecha.split('-');
+                const [hh, mm] = hora.split(':');
+                const dt = new Date(ano, mes - 1, dia, hh, mm);
+                
+                const diasSemanales = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                return `${diasSemanales[dt.getDay()]} ${dt.getDate()} ${hh}:${mm}`;
             });
 
             charts.horario.data.labels = labelsParaEje;
@@ -404,7 +395,7 @@
                     label: m,
                     backgroundColor: MODEL_COLORS[m],
                     data: dRef.map(puntoRef => {
-                        // BLINDAJE: Buscamos el dato comparando la fecha exacta original (p.x) en lugar del texto traducido
+                        // Sincronización exacta por el string "x" del JSON
                         const punto = datosBrutos.find(p => p.x === puntoRef.x);
                         return punto ? punto.y : 0;
                     })
@@ -414,7 +405,9 @@
             charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
             charts.horario.update();
             
-            actualizarKPIs(dRef);
+            if (typeof actualizarKPIs === 'function') {
+                actualizarKPIs(dRef);
+            }
         }
 
         function renderizarClima() {
