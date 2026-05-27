@@ -312,10 +312,23 @@
         }
 
         async function cambiarLote(archivo) {
-            const res = await fetch(`data/${archivo}`);
-            rawData = await res.json();
-            poblarSelectorFechas();
-            actualizarPantalla();
+            try {
+                // Añadimos ?t=${Date.now()} para evitar que el navegador use la versión guardada
+                const res = await fetch(`data/${archivo}?t=${Date.now()}`);
+                
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                
+                rawData = await res.json();
+                
+                // Actualizamos los selectores y la pantalla con los nuevos datos
+                poblarSelectorFechas();
+                actualizarPantalla();
+                
+                console.log(`Lote ${archivo} cargado exitosamente.`);
+            } catch (error) {
+                console.error("Error al cargar el lote:", error);
+                // Opcional: mostrar un aviso visual al usuario si falla
+            }
         }
 
         function poblarSelectorFechas() {
