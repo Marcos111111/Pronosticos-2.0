@@ -334,13 +334,26 @@
         function poblarSelectorFechas() {
             const select = document.getElementById('selector-fecha');
             select.innerHTML = '<option value="all">Próximos 7 días</option>';
+            
+            // Obtenemos el inicio del día de hoy (miércoles 27 en este caso)
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+
             const mKey = Object.keys(rawData.horario)[0];
-            const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))];
+            
+            // Filtramos los días únicos y descartamos los que sean anteriores a hoy
+            const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))]
+                .filter(f => {
+                    const fechaDia = new Date(f + "T00:00:00");
+                    return fechaDia >= hoy;
+                });
+
             diasUnicos.forEach(f => {
                 const d = new Date(f + "T12:00:00");
                 const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                 const opt = document.createElement('option');
-                opt.value = f; opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
+                opt.value = f; 
+                opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
                 select.appendChild(opt);
             });
         }
@@ -362,20 +375,29 @@
 
         // --- RENDERIZADO ---
         function renderizarResumen() {
-            // 1. Diario (Precipitación Acumulada)
-            charts.diario.data.labels = rawData.diario.labels.map(traducirDia);
+            // 1. Diario (Precipitación Acumulada filtrada)
+            // Obtenemos el límite de hoy para filtrar los días
+            const hoy = new Date();
+            hoy.setHours(0,0,0,0); // Normalizamos a las 00:00 para comparar días
+            
+            // Filtramos los labels y los datos basados en si la fecha es >= hoy
+            const datosDiariosFiltrados = rawData.diario.labels.map((label, index) => ({
+                label: label,
+                valor: rawData.diario.data[index],
+                date: new Date(label + "T00:00:00") // Asumiendo formato de fecha en labels
+            })).filter(item => item.date >= hoy);
+
+            charts.diario.data.labels = datosDiariosFiltrados.map(d => traducirDia(d.label));
             charts.diario.data.datasets = [{ 
                 label: 'Lluvia (mm)', 
-                data: rawData.diario.data, 
+                data: datosDiariosFiltrados.map(d => d.valor), 
                 backgroundColor: '#3b82f6', 
                 borderRadius: 5 
             }];
             charts.diario.update();
 
-            // 2. Horario Sincronizado
+            // 2. Horario Sincronizado (Aquí usamos nuestra función "tijera" de confianza)
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-            
-            // --- ACÁ APLICAMOS EL FILTRO ESTRICTO PARA EL EJE MAESTRO ---
             const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo']);
 
             const mapaEtiquetas = {};
@@ -389,9 +411,7 @@
             charts.horario.data.labels = labelsParaEje;
 
             charts.horario.data.datasets = modelos.map(m => {
-                // --- FILTRAMOS TAMBIÉN CADA MODELO INDIVIDUAL ---
                 const datosBrutos = obtenerDatosFiltrados(rawData.horario[m]);
-
                 return {
                     label: m,
                     backgroundColor: MODEL_COLORS[m],
@@ -404,8 +424,6 @@
 
             charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
             charts.horario.update();
-            
-            // Actualizamos los máximos y mínimos (KPIs) usando solo los datos futuros/actuales
             actualizarKPIs(dRef);
         }
 
