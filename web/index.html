@@ -190,28 +190,44 @@
             return {
                 grid: {
                     display: true,
-                    // Dibuja la línea vertical de fondo únicamente cada 3 horas
-                    color: (context) => (context.index % 3 === 0 ? '#475569' : 'transparent'),
-                    borderDash: [5, 5], // Formato punteado
-                    drawBorder: true
+                    drawOnChartArea: true,
+                    drawTicks: true,
+                    borderDash: [5, 5], // Fuerza a que TODAS las líneas visibles sean punteadas
+                    color: function(context) {
+                        const chart = context.chart;
+                        const label = chart.data.labels[context.index];
+                        if (!label) return 'transparent';
+
+                        const esMedianoche = label.includes('00:00');
+
+                        if (!isFiltered) {
+                            // VISTA GENERAL: Solo se dibuja la línea vertical en las medianoches
+                            return esMedianoche ? '#475569' : 'transparent';
+                        } else {
+                            // VISTA FILTRADA: Se dibujan líneas espaciadas cada 3 horas
+                            return (context.index % 3 === 0) ? '#475569' : 'transparent';
+                        }
+                    }
                 },
                 ticks: {
                     maxRotation: 45,
                     minRotation: 45,
-                    autoSkip: false, // Evitamos que Chart.js rompa el espaciado
+                    autoSkip: false, // Manejamos el salto nosotros para que no haga desastres
                     callback: function(value, index) {
-                        // Filtro visual: Solo mostramos texto cada 3 horas
-                        if (index % 3 !== 0) return '';
-                        
-                        const labelCompleto = this.getLabelForValue(value); // Ej: "Mar 26 21:00"
-                        if (!labelCompleto) return '';
-                        
-                        const partes = labelCompleto.split(' ');
-                        const diaTexto = `${partes[0]} ${partes[1]}`;
-                        const horaTexto = partes[2];
-                        
-                        // Si la hora es la medianoche, muestra el cambio de día, si no la hora
-                        return (horaTexto === '00:00') ? diaTexto : horaTexto;
+                        const label = this.getLabelForValue(value);
+                        if (!label) return '';
+
+                        const partes = label.split(' '); // ["Mié", "27", "10:00"]
+                        const diaTexto = `${partes[0]} ${partes[1]}`;   // "Mié 27"
+                        const horaTexto = partes[2];                  // "10:00"
+
+                        if (!isFiltered) {
+                            // VISTA GENERAL: Solo muestra el Texto del Día a las 00:00
+                            return (horaTexto === '00:00') ? diaTexto : '';
+                        } else {
+                            // VISTA FILTRADA: Muestra las horas de 3 en 3 horas
+                            return (index % 3 === 0) ? horaTexto : '';
+                        }
                     }
                 }
             };
@@ -353,55 +369,62 @@
 
         // --- RENDERIZADO ---
         function renderizarResumen() {
-            // --- 1. GRÁFICO DIARIO (BARRAS DE PRECIPITACIÓN) ---
             const mapaDias = { 'Sun': 'Dom', 'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb' };
             
-            // Traducimos los labels del JSON ("Wed 27" -> "Mié 27") para el eje X
-            charts.diario.data.labels = rawData.diario.labels.map(l => {
-                const partes = l.split(' ');
-                const engDia = partes[0];
-                const numDia = partes[1];
-                return mapaDias[engDia] ? `${mapaDias[engDia]} ${numDia}` : l;
-            }); 
+            // --- 1. GRÁFICO DIARIO (BARRAS DE PRECIPITACIÓN) ---
+            const mKeyRef = Object.keys(rawData.horario)[0];
+            const fechasHorariasUnicas = [...new Set(rawData.horario[mKeyRef].map(p => p.x.split(' ')[0]))].sort();
+            
+            const t = new Date();
+            const hoyYMD = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 
+            // Mapeamos y filtramos para quitar días pasados del JSON de forma automática
+            const datosDiariosFiltrados = rawData.diario.labels.map((l, index) => {
+                const partes = l.split(' ');
+                const diaTraducido = mapaDias[partes[0]] ? `${mapaDias[partes[0]]} ${partes[1]}` : l;
+                return {
+                    labelTxt: diaTraducido,
+                    fechaISO: fechasHorariasUnicas[index],
+                    valor: rawData.diario.data[index]
+                };
+            }).filter(item => item.fechaISO >= hoyYMD); 
+
+            charts.diario.data.labels = datosDiariosFiltrados.map(d => d.labelTxt); 
             charts.diario.data.datasets = [{ 
                 label: 'Lluvia (mm)', 
-                data: rawData.diario.data, 
+                data: datosDiariosFiltrados.map(d => d.valor), 
                 backgroundColor: '#3b82f6', 
                 borderRadius: 5 
             }];
             charts.diario.update();
 
-            // --- 2. GRÁFICO HORARIO COMPARATIVO ---
+            // --- 2. GRÁFICO HORARIO COMPARATIVO DE PRECIPITACIONES ---
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
             const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo'] || rawData.horario[modelos[0]]);
 
-            // Generamos las etiquetas del eje combinando Día + Hora de forma limpia
             const labelsParaEje = dRef.map(p => {
                 const [fecha, hora] = p.x.split(' ');
                 const [ano, mes, dia] = fecha.split('-');
                 const [hh, mm] = hora.split(':');
                 const dt = new Date(ano, mes - 1, dia, hh, mm);
-                
                 const diasSemanales = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
                 return `${diasSemanales[dt.getDay()]} ${dt.getDate()} ${hh}:${mm}`;
             });
 
             charts.horario.data.labels = labelsParaEje;
-
             charts.horario.data.datasets = modelos.map(m => {
                 const datosBrutos = obtenerDatosFiltrados(rawData.horario[m]);
                 return {
                     label: m,
                     backgroundColor: MODEL_COLORS[m],
                     data: dRef.map(puntoRef => {
-                        // Sincronización exacta por el string "x" del JSON
                         const punto = datosBrutos.find(p => p.x === puntoRef.x);
                         return punto ? punto.y : 0;
                     })
                 };
             });
 
+            // Acoplamos el comportamiento de líneas punteadas y ocultación de horas
             charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
             charts.horario.update();
             
