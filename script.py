@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import timezone
 import numpy as np
 from datetime import datetime, timedelta
 import sqlite3
@@ -48,7 +49,7 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
 
         # --- CORRECCIÓN DE ZONA HORARIA ---
         # Independizamos el código del reloj del servidor usando UTC puro y restando 3 horas para Argentina
-        ahora_utc = datetime.utcnow()
+        ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         hace_una_hora_utc = (ahora_utc - timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')
         ahora_arg = ahora_utc - timedelta(hours=3)
 
@@ -84,7 +85,10 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             
             # --- CONVERSIÓN A HORA LOCAL ANTES DE ENVIAR AL JSON ---
             # Pasamos la hora UTC de la base de datos a hora Argentina
-            dt_utc = datetime.strptime(fecha_str_utc, '%Y-%m-%d %H:%M:%S')
+            try:
+                dt_utc = datetime.strptime(fecha_str_utc, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                dt_utc = datetime.strptime(fecha_str_utc, '%Y-%m-%d %H:%M')
             dt_arg = dt_utc - timedelta(hours=3)
             fecha_str_local = dt_arg.strftime('%Y-%m-%d %H:%M:%S')
             
@@ -129,7 +133,7 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             fecha_dt = datetime.strptime(d, '%Y-%m-%d')
             labels_diarios.append(fecha_dt.strftime('%a %d'))
             valores_diarios.append(round(promedio_dia, 1))
-            
+
         modelos_reales = [m for m in series_por_modelo.keys() if m != 'CONSENSO']
         totales_semanales = [sum(pt['y'] for pt in series_por_modelo[mod]) for mod in modelos_reales]
         
