@@ -47,11 +47,16 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # --- CORRECCIÓN DE ZONA HORARIA ---
-        # Independizamos el código del reloj del servidor usando UTC puro y restando 3 horas para Argentina
+        # --- CORRECCIÓN DE ZONA HORARIA Y FILTRO DE INICIO ---
         ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-        hace_una_hora_utc = (ahora_utc - timedelta(days=1)).strftime('%Y-%m-%d 00:00:00')
         ahora_arg = ahora_utc - timedelta(hours=3)
+
+        # 1. Creamos el piso de HOY a las 00:00:00 en hora de Argentina
+        inicio_hoy_arg = ahora_arg.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 2. Lo pasamos a UTC (+3 horas) para consultar la base de datos correctamente
+        inicio_hoy_utc = inicio_hoy_arg + timedelta(hours=3)
+        filtro_desde_utc = inicio_hoy_utc.strftime('%Y-%m-%d %H:%M:%S')
 
         query = """
         SELECT p.*, m.nombre as modelo_nombre
@@ -59,7 +64,7 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         JOIN modelos m ON p.modelo_id = m.id
         JOIN campos c ON p.campo_id = c.id
         WHERE c.nombre = ? 
-        -- Inyectamos la hora calculada por Python en lugar de usar la de SQLite
+        -- Filtramos para que solo traiga fechas pronosticadas desde hoy en adelante
         AND p.fecha_pronosticada >= ?
         AND p.id IN (
             SELECT MAX(id)
@@ -69,7 +74,8 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         ORDER BY p.fecha_pronosticada ASC
         """
         
-        cursor.execute(query, (campo_nombre, hace_una_hora_utc))
+        # Pasamos el nuevo filtro_desde_utc a la query
+        cursor.execute(query, (campo_nombre, filtro_desde_utc))
         filas = cursor.fetchall()
         
         if not filas:
@@ -83,8 +89,7 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             mod = r['modelo_nombre']
             fecha_str_utc = r['fecha_pronosticada']
             
-            # --- CONVERSIÓN A HORA LOCAL ANTES DE ENVIAR AL JSON ---
-            # Pasamos la hora UTC de la base de datos a hora Argentina
+            # --- CONVERSIÓN A HORA LOCAL ---
             try:
                 dt_utc = datetime.strptime(fecha_str_utc, '%Y-%m-%d %H:%M:%S')
             except ValueError:
@@ -103,7 +108,6 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
             if mod not in series_por_modelo:
                 series_por_modelo[mod] = []
             
-            # Guardamos la fecha_str_local, ya corregida a tu horario
             series_por_modelo[mod].append({
                 "x": fecha_str_local,
                 "y": lluvia,
@@ -145,7 +149,6 @@ def exportar_dashboard_v2(db_path, campo_nombre, output_path):
         json_final = {
             "metadata": {
                 "lote": campo_nombre,
-                # Usamos la variable ahora_arg que tiene la hora real
                 "actualizado": ahora_arg.strftime("%d/%m %H:%M"),
                 "total_semana": round(sum(valores_diarios), 1),
                 "certeza": certeza

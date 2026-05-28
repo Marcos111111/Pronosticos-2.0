@@ -91,10 +91,73 @@
         let fechaFiltro = "all";
         let seccionActual = "resumen";
 
+        const TRADUCCION_DIAS = {
+            'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom',
+            'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 'Thursday': 'Jueves', 
+            'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
+        };
+
+        // ==========================================
+        // CONFIGURACIÓN GLOBAL DE TOOLTIPS (Para todos los gráficos)
+        // ==========================================
+        Chart.defaults.plugins.tooltip.position = 'nearest';
+        Chart.defaults.plugins.tooltip.backgroundColor = '#1e293b';
+        Chart.defaults.plugins.tooltip.titleColor = '#60a5fa';
+        Chart.defaults.plugins.tooltip.bodyColor = '#f1f5f9';
+        Chart.defaults.plugins.tooltip.borderColor = '#334155';
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+        Chart.defaults.plugins.tooltip.padding = 10;
+
+        Chart.defaults.plugins.tooltip.callbacks.title = function(context) {
+            if (!context || !context[0]) return '';
+            
+            // Intentamos sacar el valor del label del eje, o del objeto x crudo si viene de un dataset
+            let rawValue = context[0].label || '';
+            if (!rawValue && context[0].raw && context[0].raw.x) {
+                rawValue = context[0].raw.x;
+            }
+            
+            if (!rawValue) return '';
+            
+            // Si no tiene el formato de fecha/hora largo del JSON (guiones y dos puntos), se devuelve tal cual
+            if (!rawValue.toString().includes('-') || !rawValue.toString().includes(':')) {
+                return rawValue;
+            }
+            
+            const parts = rawValue.toString().split(' ');
+            if (parts.length < 2) return rawValue;
+            
+            const fecha = parts[0]; // "2026-05-30"
+            const hora = parts[1];  // "13:00:00"
+            const horaCorta = hora.substring(0, 5); // "13:00"
+            
+            // Parseo seguro usando el mediodía para evitar desfasajes de zona horaria
+            const d = new Date(fecha + "T12:00:00");
+            const diasSemanas = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            
+            if (isNaN(d.getTime())) return rawValue;
+            
+            // Formato final unificado: "Sáb 30 - 13:00 hs"
+            return `${diasSemanas[d.getDay()]} ${d.getDate()} - ${horaCorta} hs`;
+        };
+
         const MODEL_COLORS = { 
             'GFS': '#0212A5', 'OpenMeteo': '#FF5757', 'SMN_WRF': '#D6D306', 
             'MET_Norway': '#00CC96', 'CONSENSO': '#60a5fa' 
         };
+
+        function formatearTextoEnEspañol(texto) {
+            if (!texto) return '';
+            let str = texto.toString();
+            
+            // Recorre el diccionario y reemplaza la palabra exacta si hace match
+            Object.keys(TRADUCCION_DIAS).forEach(diaIngles => {
+                const regex = new RegExp(`\\b${diaIngles}\\b`, 'g');
+                str = str.replace(regex, TRADUCCION_DIAS[diaIngles]);
+            });
+            
+            return str;
+        }
 
         // --- PLUGIN: DIBUJO DE LÍNEAS EN LAS MEDIANOCHES (00:00) ---
         const divisorDiasPlugin = {
@@ -200,7 +263,6 @@
         const baseOptions = {
             responsive: true,
             maintainAspectRatio: false,
-            // Forzamos a Chart.js a buscar el punto más cercano en el eje X de forma geométrica pura
             interaction: {
                 mode: 'index',
                 intersect: false,
@@ -217,45 +279,7 @@
             },
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    enabled: true,
-                    position: 'nearest',
-                    backgroundColor: '#1e293b',
-                    titleColor: '#60a5fa',
-                    bodyColor: '#f1f5f9',
-                    borderColor: '#334155',
-                    borderWidth: 1,
-                    padding: 10,
-                    displayColors: true,
-                    callbacks: {
-                        title: function(context) {
-                            if (!context || !context[0]) return '';
-                            const chart = context[0].chart;
-                            const index = context[0].dataIndex;
-                            const label = chart.data.labels[index];
-                            if (!label) return '';
-                            
-                            const str = label.toString().trim();
-                            const parts = str.match(/\d+/g);
-                            if (!parts || parts.length < 3) return str;
-                            
-                            const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-                            if (isNaN(dt.getTime())) return str;
-                            
-                            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                            const nombreDia = dias[dt.getDay()];
-                            const nroDia = parseInt(parts[2], 10);
-                            
-                            if (str.includes(':') && parts.length >= 5) {
-                                const hora = parts[3].padStart(2, '0');
-                                const mins = parts[4].padStart(2, '0');
-                                return `${nombreDia} ${nroDia} - ${hora}:${mins} hs`;
-                            }
-                            
-                            return `${nombreDia} ${nroDia}`;
-                        }
-                    }
-                },
+                // Ya no hace falta declarar el tooltip acá adentro, Chart.defaults hace toda la magia
                 zoom: zoomOptions,
                 divisorDias: divisorDiasPlugin
             }
@@ -343,21 +367,44 @@
         // --- RENDERIZADORES SINOÓPTICOS DIRECTOS AL JSON ---
         function renderizarResumen() {
             // 1. Gráfico Diario (Lluvia Acumulada)
-            const diasSemanas = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             charts.diario.data.labels = rawData.diario.labels.map(l => {
-                const parts = l.split(' ');
-                const d = new Date(parts[1] + "T12:00:00");
-                return `${diasSemanas[d.getDay()]} ${d.getDate()}`;
+                // Pasa la etiqueta directamente por tu diccionario global (Ej: "Wed 03" -> "Mié 03")
+                return formatearTextoEnEspañol(l);
             });
+
             charts.diario.data.datasets = [{ 
                 label: 'Lluvia (mm)', 
                 data: rawData.diario.data, 
                 backgroundColor: '#3b82f6', 
                 borderRadius: 5 
             }];
+
+            // Configuramos el eje X como categoría para que no auto-formatee en inglés
+            charts.diario.options.scales.x = {
+                type: 'category',
+                ticks: {
+                    color: '#94a3b8',
+                    maxRotation: 0,
+                    minRotation: 0,
+                    autoSkip: true
+                }
+            };
+
+            // Aseguramos que el tooltip use la etiqueta en español mapeada
+            if (!charts.diario.options.plugins) charts.diario.options.plugins = {};
+            charts.diario.options.plugins.tooltip = {
+                ...charts.diario.options.plugins.tooltip,
+                callbacks: {
+                    title: function(context) {
+                        if (!context || !context[0]) return '';
+                        return context[0].label || '';
+                    }
+                }
+            };
+
             charts.diario.update();
 
-            // 2. Gráfico Horario Combinado
+            // 2. Gráfico Horario Combinado (TOTALMENTE INTACTO)
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
             const dRef = fechaFiltro === "all" 
                 ? rawData.horario['OpenMeteo'] 
