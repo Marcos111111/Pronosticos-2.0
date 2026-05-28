@@ -131,7 +131,21 @@ export const divisorDiasPlugin = {
 // --- CONFIGURACIÓN DINÁMICA DEL EJE X CON PRIORIDAD MANUAL ---
 export function getDynamicXConfig(isFiltered) {
     return {
-        grid: { display: false, drawOnChartArea: false },
+        // 🌟 Usamos funciones dinámicas para obligar al Canvas a romper la caché de líneas
+        grid: isFiltered 
+            ? {
+                display: true,
+                drawOnChartArea: true,
+                color: 'rgba(156, 163, 175, 0.25)', 
+                
+                // 🚀 El secreto: Pasarlos como funciones ejecutables
+                borderDash: () => [4, 4], // Para Chart.js v3 y v4 (Grilla interna)
+                dash: () => [4, 4]         // Por seguridad estructural
+              }
+            : { 
+                display: false, 
+                drawOnChartArea: false 
+              },
         ticks: {
             maxRotation: 0,
             minRotation: 0,
@@ -393,24 +407,41 @@ export function renderizarClima() {
         label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.2, pointRadius: 0
     });
 
+    const esVistaUnDia = fechaFiltro !== "all";
+    const configDinamica = getDynamicXConfig(esVistaUnDia);
+
     ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
         charts[key].data.labels = d.map(p => p.x);
 
         if(key === 'temp') {
             charts[key].data.datasets = [datasetBase('Temp', d.map(p => p.temp), '#ef4444'), datasetBase('Rocío', d.map(p => p.rocio), '#06b6d4')];
         } else if(key === 'delta') {
-            charts[key].data.datasets = [datasetBase('Delta', d.map(p => (p.temp - p.rocio).toFixed(1)), '#f472b6', true)];
+            charts[key].data.datasets = [
+                datasetBase('Delta', d.map(p => (p.temp - p.rocio).toFixed(1)), '#f472b6', true),
+                { ...datasetBase('Umbral Mín (8)', Array(d.length).fill(8), '#eab30866'), borderDash: [8, 1] },
+                { ...datasetBase('Umbral Máx (12)', Array(d.length).fill(12), '#eab30866'), borderDash: [8, 1] },
+                { ...datasetBase('Óptimo Mín (9)', Array(d.length).fill(9), '#22c55e66'), borderDash: [8, 1] },
+                { ...datasetBase('Óptimo Máx (11)', Array(d.length).fill(11), '#22c55e66'), borderDash: [8, 1] }
+            ];
         } else if(key === 'humedad') {
             charts[key].data.datasets = [datasetBase('Hum %', d.map(p => p.hum), '#10b981')];
         } else if(key === 'viento') {
             charts[key].data.datasets = [datasetBase('Viento m/s', d.map(p => p.viento), '#8b5cf6')];
         }
 
+        const tipoEjeOriginal = charts[key].options.scales.x?.type || 'category';
+
+        // 🌟 ASIGNACIÓN LIMPIA: Seteamos todo en el árbol de opciones principal
         charts[key].options.scales.x = {
-            ...charts[key].options.scales.x,
-            ...getDynamicXConfig(fechaFiltro !== "all")
+            type: tipoEjeOriginal,
+            ...configDinamica
         };
-        charts[key].update();
+
+        // 🌟 ELIMINADO: Quitamos por completo el bloque "charts[key].scales.x.options.grid = ..." 
+        // que corrompía el copiado del array borderDash.
+
+        // Forzamos un update completo para que vuelva a compilar el árbol de opciones de cero
+        charts[key].update(); 
     });
     actualizarKPIs(d);
 }
