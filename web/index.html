@@ -8,16 +8,16 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800&display=swap" rel="stylesheet">
     <style>
         body { background-color: #0f172a; color: #f1f5f9; font-family: 'Inter', sans-serif; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 1.25rem; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 1.25rem; position: relative; }
         .btn-tab { transition: all 0.2s; border: 1px solid transparent; }
         .btn-active { background-color: #3b82f6 !important; color: white !important; border-color: #60a5fa; }
         .btn-model { background: #1e293b; color: #94a3b8; font-size: 10px; font-weight: 800; padding: 8px 12px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; }
         .btn-model-active { color: white; background: #2563eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        canvas {touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none;}
+        canvas { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; }
     </style>
 </head>
 <body class="pb-10">
@@ -65,17 +65,17 @@
         </div>
 
         <div id="sec-resumen" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="card"><canvas id="chart-diario"></canvas></div>
-            <div class="card"><canvas id="chart-horario"></canvas></div>
+            <div class="card" style="height: 350px;"><canvas id="chart-diario"></canvas></div>
+            <div class="card" style="height: 350px;"><canvas id="chart-horario"></canvas></div>
         </div>
 
         <div id="sec-aire" class="hidden space-y-6">
             <div id="model-selector-container" class="flex gap-2 overflow-x-auto no-scrollbar pb-2 justify-center"></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card"><canvas id="chart-temp-rocio"></canvas></div>
-                <div class="card"><canvas id="chart-delta"></canvas></div>
-                <div class="card"><canvas id="chart-humedad"></canvas></div>
-                <div class="card"><canvas id="chart-viento"></canvas></div>
+                <div class="card" style="height: 300px;"><canvas id="chart-temp-rocio"></canvas></div>
+                <div class="card" style="height: 300px;"><canvas id="chart-delta"></canvas></div>
+                <div class="card" style="height: 300px;"><canvas id="chart-humedad"></canvas></div>
+                <div class="card" style="height: 300px;"><canvas id="chart-viento"></canvas></div>
             </div>
         </div>
 
@@ -96,53 +96,28 @@
             'MET_Norway': '#00CC96', 'CONSENSO': '#60a5fa' 
         };
 
-        // --- TRADUCCIÓN (Copiada del éxito del gráfico diario) ---
-        function traducirDia(label) {
-            if (!label) return "";
-            const mapeo = {
-                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 
-                'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
-            };
-            let res = label;
-            Object.entries(mapeo).forEach(([ing, esp]) => {
-                res = res.replace(ing, esp);
-            });
-            return res;
-        }
-
-
-
-        // --- PLUGIN: LÍNEAS PUNTEADAS DIVISORIAS DE DÍAS ---
+        // --- PLUGIN: DIBUJO DE LÍNEAS EN LAS MEDIANOCHES (00:00) ---
         const divisorDiasPlugin = {
             id: 'divisorDias',
             afterDraw: (chart) => {
-                if (chart.canvas.id === 'chart-diario') return;
-
                 const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-                const labels = chart.data.labels;
-                if (!labels || labels.length === 0) return;
+                if (!x || !chart.data || !chart.data.labels) return;
+
+                const esHorario = chart.data.labels.some(l => l && l.toString().includes(':'));
+                if (!esHorario) return;
 
                 ctx.save();
-                ctx.strokeStyle = 'rgba(71, 85, 105, 0.60)'; // Slate-600 con buena opacidad
-                ctx.lineWidth = 1.2;
-                ctx.setLineDash([4, 4]); // Línea punteada fija
+                ctx.strokeStyle = '#475569';
+                ctx.setLineDash([4, 4]);
+                ctx.lineWidth = 1.5;
 
-                const puntosVisibles = x.max - x.min;
-                const esVistaGeneral = (puntosVisibles > 48);
-                const isFiltered = chart.options.scales.x.isFiltered; // Detecta si es la vista de 1 día
-
-                // --- REGLA EXCLUSIVA PARA LA VISTA DÍA POR DÍA ---
-                if (isFiltered) {
-                    for (let i = 0; i < labels.length; i++) {
-                        const label = labels[i];
-                        if (!label) continue;
-
-                        const hora = label.split(' ').pop();
-                        const xPos = x.getPixelForValue(i);
-
-                        if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
-                            // En la vista de 1 día, metemos líneas cada 3 horas sí o sí
-                            if (/^(00|03|06|09|12|15|18|21):00$/.test(hora) || hora === '0:00') {
+                chart.data.labels.forEach((label, index) => {
+                    if (label) {
+                        const str = label.toString();
+                        const match = str.match(/\s+(\d{2}):/);
+                        if (match && match[1] === '00') {
+                            const xPos = x.getPixelForValue(index);
+                            if (xPos >= x.left && xPos <= x.right) {
                                 ctx.beginPath();
                                 ctx.moveTo(xPos, top);
                                 ctx.lineTo(xPos, bottom);
@@ -150,128 +125,143 @@
                             }
                         }
                     }
-                    ctx.restore();
-                    return; // Termina acá para no ejecutar la lógica de 7 días
-                }
-
-                // --- LA VISTA DE 7 DÍAS QUEDA EXACTAMENTE IGUAL (NO SE TOCA) ---
-                for (let i = 0; i < labels.length; i++) {
-                    const label = labels[i];
-                    if (!label) continue;
-
-                    const partes = label.split(' ');
-                    const hora = partes[partes.length - 1];
-                    const xPos = x.getPixelForValue(i);
-
-                    if (xPos >= chart.chartArea.left && xPos <= chart.chartArea.right) {
-                        if (esVistaGeneral) {
-                            if (hora === '00:00' || hora === '0:00') {
-                                ctx.beginPath();
-                                ctx.moveTo(xPos, top);
-                                ctx.lineTo(xPos, bottom);
-                                ctx.stroke();
-                            }
-                        } else {
-                            if (/^(00|06|12|18):00$/.test(hora) || hora === '0:00') {
-                                ctx.beginPath();
-                                ctx.moveTo(xPos, top);
-                                ctx.lineTo(xPos, bottom);
-                                ctx.stroke();
-                            }
-                        }
-                    }
-                }
+                });
                 ctx.restore();
             }
         };
 
-        // --- CONFIGURACIÓN EJES X OPTIMIZADA ---
+        Chart.register(divisorDiasPlugin);
+
+        // --- CONFIGURACIÓN DINÁMICA DEL EJE X CON PRIORIDAD MANUAL ---
         function getDynamicXConfig(isFiltered) {
             return {
-                grid: {
-                    display: true,
-                    drawOnChartArea: true,
-                    drawTicks: true,
-                    borderDash: [5, 5], // Fuerza a que TODAS las líneas visibles sean punteadas
-                    color: function(context) {
-                        const chart = context.chart;
-                        const label = chart.data.labels[context.index];
-                        if (!label) return 'transparent';
-
-                        const esMedianoche = label.includes('00:00');
-
-                        if (!isFiltered) {
-                            // VISTA GENERAL: Solo se dibuja la línea vertical en las medianoches
-                            return esMedianoche ? '#475569' : 'transparent';
-                        } else {
-                            // VISTA FILTRADA: Se dibujan líneas espaciadas cada 3 horas
-                            return (context.index % 3 === 0) ? '#475569' : 'transparent';
-                        }
-                    }
-                },
+                grid: { display: false, drawOnChartArea: false },
                 ticks: {
-                    maxRotation: 45,
-                    minRotation: 45,
-                    autoSkip: false, // Manejamos el salto nosotros para que no haga desastres
-                    callback: function(value, index) {
-                        const label = this.getLabelForValue(value);
-                        if (!label) return '';
+                    maxRotation: 0,
+                    minRotation: 0,
+                    autoSkip: false, // DESACTIVADO: Ahora controlamos el espacio nosotros manualmente
+                    color: '#94a3b8',
+                    font: { size: 10, weight: '600' },
+                    callback: function(val, index) {
+                        const label = this.getLabelForValue(val);
+                        if (!label || !label.includes(' ')) return '';
 
-                        const partes = label.split(' '); // ["Mié", "27", "10:00"]
-                        const diaTexto = `${partes[0]} ${partes[1]}`;   // "Mié 27"
-                        const horaTexto = partes[2];                  // "10:00"
+                        const partes = label.split(' ');
+                        const fechaStr = partes[0];
+                        const horaStr = partes[1];
+                        const hora = parseInt(horaStr.split(':')[0]);
 
-                        if (!isFiltered) {
-                            // VISTA GENERAL: Solo muestra el Texto del Día a las 00:00
-                            return (horaTexto === '00:00') ? diaTexto : '';
-                        } else {
-                            // VISTA FILTRADA: Muestra las horas de 3 en 3 horas
-                            return (index % 3 === 0) ? horaTexto : '';
+                        const diasSemanas = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+                        if (isFiltered) {
+                            return (hora % 3 === 0) ? `${hora}:00` : '';
+                        }
+                        
+                        // Calculamos cuántos puntos (horas) entran actualmente en la pantalla
+                        const minVisible = this.chart.scales.x.min;
+                        const maxVisible = this.chart.scales.x.max;
+                        const puntosEnPantalla = maxVisible - minVisible;
+
+                        // PRIORIDAD 1: Las medianoches (00:00) SIEMPRE se muestran, sin importar el zoom.
+                        if (hora === 0) {
+                            const dt = new Date(fechaStr + "T12:00:00");
+                            return `${diasSemanas[dt.getDay()]} ${dt.getDate()}`;
+                        }
+
+                        // PRIORIDAD 2: Control manual de horas según el nivel de zoom
+                        if (puntosEnPantalla > 120) {
+                            // Muy alejado (Vista completa de 7 días): Ocultamos las horas para limpiar el eje
+                            return '';
+                        } 
+                        else if (puntosEnPantalla <= 120 && puntosEnPantalla > 48) {
+                            // Zoom medio: Mostramos solo el mediodía (12:00) para dar contexto
+                            return (hora === 12) ? '12:00' : '';
+                        } 
+                        else {
+                            // Zoom cercano (Pocos días visibles): Mostramos las horas cada 3 o 6 horas
+                            return (hora % 6 === 0) ? `${hora}:00` : '';
                         }
                     }
                 }
             };
         }
 
-        // --- OPCIONES BASE ---
-        const baseOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: { 
-                legend: { labels: { color: '#94a3b8', font: { size: 10, weight: '800' } } },
-                tooltip: { enabled: true },
-                zoom: {
-                    pan: {  
-                        enabled: true,
-                        mode: 'x',
-                        modifierKey: null, 
-                        speed: 10, 
-                        threshold: 10 
-                    },
-                    zoom: {
-                        wheel: { enabled: true, speed: 0.05 },
-                        pinch: { enabled: true },
-                        mode: 'x',
-                        speed: 0.01,       // Velocidad baja controlada
-                        sensitivity: 0.1,  // Fricción táctil estable
-                        
-                        // --- PISO DE ZOOM RÍGIDO ---
-                        // Bloquea el zoom en 24 horas para la vista diaria. No te va a dejar
-                        // romper la escala ni desplazar las horas al futuro de forma accidental.
-                        minRange: 24, 
-                        
-                        onZoomComplete: ({chart}) => chart.update('none')
-                    }
-                }
-            },
-            scales: {
-                y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-                x: getDynamicXConfig(false)
+        // --- CONFIGURACIÓN DE ZOOM NATIVO ---
+        const zoomOptions = {
+            pan: { enabled: true, mode: 'x' },
+            zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'x'
             }
         };
 
-        // --- INICIALIZACIÓN Y CARGA ---
+        // --- OPCIONES BASE PARA LOS GRÁFICOS ---
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            // Forzamos a Chart.js a buscar el punto más cercano en el eje X de forma geométrica pura
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    offset: false,
+                    ...getDynamicXConfig(false)
+                },
+                y: { 
+                    grid: { color: '#1e293b' },
+                    ticks: { color: '#64748b', font: { size: 10 } }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: true,
+                    position: 'nearest',
+                    backgroundColor: '#1e293b',
+                    titleColor: '#60a5fa',
+                    bodyColor: '#f1f5f9',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: true,
+                    callbacks: {
+                        title: function(context) {
+                            if (!context || !context[0]) return '';
+                            const chart = context[0].chart;
+                            const index = context[0].dataIndex;
+                            const label = chart.data.labels[index];
+                            if (!label) return '';
+                            
+                            const str = label.toString().trim();
+                            const parts = str.match(/\d+/g);
+                            if (!parts || parts.length < 3) return str;
+                            
+                            const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                            if (isNaN(dt.getTime())) return str;
+                            
+                            const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                            const nombreDia = dias[dt.getDay()];
+                            const nroDia = parseInt(parts[2], 10);
+                            
+                            if (str.includes(':') && parts.length >= 5) {
+                                const hora = parts[3].padStart(2, '0');
+                                const mins = parts[4].padStart(2, '0');
+                                return `${nombreDia} ${nroDia} - ${hora}:${mins} hs`;
+                            }
+                            
+                            return `${nombreDia} ${nroDia}`;
+                        }
+                    }
+                },
+                zoom: zoomOptions,
+                divisorDias: divisorDiasPlugin
+            }
+        };
+
+        // --- INICIALIZACIÓN DE LA APP ---
         async function inicializarApp() {
             const selectLote = document.getElementById('selector-lote');
             const infoLotes = await Promise.all(ARCHIVOS_LISTA.map(async f => {
@@ -292,11 +282,22 @@
             ctxs.forEach(id => {
                 const key = id.replace('chart-', '').replace('-rocio', '');
                 const type = id === 'chart-diario' || id === 'chart-horario' ? 'bar' : 'line';
+                
+                // Clonamos las opciones estructurales
+                const optConfig = JSON.parse(JSON.stringify(baseOptions));
+                
+                // Volvemos a inyectar las funciones y objetos nativos que JSON.stringify rompe
+                optConfig.scales.x.ticks.callback = baseOptions.scales.x.ticks.callback;
+                optConfig.plugins.zoom = zoomOptions;
+                optConfig.plugins.divisorDias = divisorDiasPlugin;
+
+                // Forzar offset true solo al de barras diario para que no se recorten los bordes exteriores
+                if (id === 'chart-diario') optConfig.scales.x.offset = true;
+
                 charts[key] = new Chart(document.getElementById(id), { 
                     type, 
                     data: { labels: [], datasets: [] }, 
-                    options: JSON.parse(JSON.stringify(baseOptions)),
-                    plugins: [divisorDiasPlugin] // Inyectamos el plugin divisor a todos los gráficos
+                    options: optConfig
                 });
             });
 
@@ -304,51 +305,23 @@
         }
 
         async function cambiarLote(archivo) {
-            try {
-                // Añadimos ?t=${Date.now()} para evitar que el navegador use la versión guardada
-                const res = await fetch(`data/${archivo}?t=${Date.now()}`);
-                
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                
-                rawData = await res.json();
-                
-                // Actualizamos los selectores y la pantalla con los nuevos datos
-                poblarSelectorFechas();
-                actualizarPantalla();
-                
-                console.log(`Lote ${archivo} cargado exitosamente.`);
-            } catch (error) {
-                console.error("Error al cargar el lote:", error);
-                // Opcional: mostrar un aviso visual al usuario si falla
-            }
+            const res = await fetch(`data/${archivo}`);
+            rawData = await res.json();
+            poblarSelectorFechas();
+            actualizarPantalla();
         }
 
         function poblarSelectorFechas() {
             const select = document.getElementById('selector-fecha');
-            if (!select) return;
             select.innerHTML = '<option value="all">Próximos 7 días</option>';
-            
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-
             const mKey = Object.keys(rawData.horario)[0];
-            if (!mKey || !rawData.horario[mKey]) return;
-
-            const fechasRaw = rawData.horario[mKey].map(p => p.x.split(' ')[0]);
-            const diasUnicos = [...new Set(fechasRaw)].sort();
-            const mapaDias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-
+            const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))];
             diasUnicos.forEach(f => {
-                const partes = f.split('-'); 
-                const fechaDia = new Date(partes[0], partes[1] - 1, partes[2]);
-                
-                // Incluye el día si es hoy, a futuro, o si contiene las primeras horas del JSON
-                if (fechaDia >= hoy || f === fechasRaw[0]) {
-                    const opt = document.createElement('option');
-                    opt.value = f; 
-                    opt.innerText = `${mapaDias[fechaDia.getDay()]} ${fechaDia.getDate()}`;
-                    select.appendChild(opt);
-                }
+                const d = new Date(f + "T12:00:00");
+                const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                const opt = document.createElement('option');
+                opt.value = f; opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
+                select.appendChild(opt);
             });
         }
 
@@ -367,213 +340,100 @@
             document.getElementById('footer-sync').innerText = `Sync: ${rawData.metadata.actualizado} | Lote: ${rawData.metadata.lote}`;
         }
 
-        // --- RENDERIZADO ---
+        // --- RENDERIZADORES SINOÓPTICOS DIRECTOS AL JSON ---
         function renderizarResumen() {
-            const mapaDias = { 'Sun': 'Dom', 'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié', 'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb' };
-            
-            // --- 1. GRÁFICO DIARIO (BARRAS DE PRECIPITACIÓN) ---
-            const mKeyRef = Object.keys(rawData.horario)[0];
-            const fechasHorariasUnicas = [...new Set(rawData.horario[mKeyRef].map(p => p.x.split(' ')[0]))].sort();
-            
-            const t = new Date();
-            const hoyYMD = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-
-            // Mapeamos y filtramos para quitar días pasados del JSON de forma automática
-            const datosDiariosFiltrados = rawData.diario.labels.map((l, index) => {
-                const partes = l.split(' ');
-                const diaTraducido = mapaDias[partes[0]] ? `${mapaDias[partes[0]]} ${partes[1]}` : l;
-                return {
-                    labelTxt: diaTraducido,
-                    fechaISO: fechasHorariasUnicas[index],
-                    valor: rawData.diario.data[index]
-                };
-            }).filter(item => item.fechaISO >= hoyYMD); 
-
-            charts.diario.data.labels = datosDiariosFiltrados.map(d => d.labelTxt); 
+            // 1. Gráfico Diario (Lluvia Acumulada)
+            const diasSemanas = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            charts.diario.data.labels = rawData.diario.labels.map(l => {
+                const parts = l.split(' ');
+                const d = new Date(parts[1] + "T12:00:00");
+                return `${diasSemanas[d.getDay()]} ${d.getDate()}`;
+            });
             charts.diario.data.datasets = [{ 
                 label: 'Lluvia (mm)', 
-                data: datosDiariosFiltrados.map(d => d.valor), 
+                data: rawData.diario.data, 
                 backgroundColor: '#3b82f6', 
                 borderRadius: 5 
             }];
             charts.diario.update();
 
-            // --- 2. GRÁFICO HORARIO COMPARATIVO DE PRECIPITACIONES ---
+            // 2. Gráfico Horario Combinado
             const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-            const dRef = obtenerDatosFiltrados(rawData.horario['OpenMeteo'] || rawData.horario[modelos[0]]);
+            const dRef = fechaFiltro === "all" 
+                ? rawData.horario['OpenMeteo'] 
+                : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
 
-            const labelsParaEje = dRef.map(p => {
-                const [fecha, hora] = p.x.split(' ');
-                const [ano, mes, dia] = fecha.split('-');
-                const [hh, mm] = hora.split(':');
-                const dt = new Date(ano, mes - 1, dia, hh, mm);
-                const diasSemanales = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-                return `${diasSemanales[dt.getDay()]} ${dt.getDate()} ${hh}:${mm}`;
-            });
+            // SIGUE AL JSON: Pasamos las marcas x crudas directas como identificadores maestros
+            charts.horario.data.labels = dRef.map(p => p.x);
 
-            charts.horario.data.labels = labelsParaEje;
             charts.horario.data.datasets = modelos.map(m => {
-                const datosBrutos = obtenerDatosFiltrados(rawData.horario[m]);
+                const datosBrutos = fechaFiltro === "all" 
+                    ? rawData.horario[m] 
+                    : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro));
+
                 return {
                     label: m,
                     backgroundColor: MODEL_COLORS[m],
-                    data: dRef.map(puntoRef => {
-                        const punto = datosBrutos.find(p => p.x === puntoRef.x);
+                    data: dRef.map(ref => {
+                        const punto = datosBrutos.find(p => p.x === ref.x);
                         return punto ? punto.y : 0;
                     })
                 };
             });
 
-            // Acoplamos el comportamiento de líneas punteadas y ocultación de horas
-            charts.horario.options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
+            charts.horario.options.scales.x = {
+                ...charts.horario.options.scales.x,
+                ...getDynamicXConfig(fechaFiltro !== "all")
+            };
             charts.horario.update();
-            
-            if (typeof actualizarKPIs === 'function') {
-                actualizarKPIs(dRef);
-            }
+            actualizarKPIs(dRef);
         }
 
         function renderizarClima() {
-            // El eje de tiempo maestro siempre se basa en OpenMeteo para mantener la consistencia horaria pura
-            const ejeReferenciaHoras = obtenerDatosFiltrados(rawData.horario['OpenMeteo']);
-    
-            const datosModeloActual = rawData.horario[selectedModel];
-
-            // Traducimos las etiquetas horarias del eje maestro
-            const labelsTraducidos = ejeReferenciaHoras.map(p => {
-                const dt = new Date(p.x.replace(' ', 'T'));
-                const labelIngles = `${dt.toLocaleDateString('en-US', {weekday:'short'})}${dt.getDate()} ${p.x.split(' ')[1]}`;
-                return traducirDia(labelIngles);
-            });
-
+            const d = fechaFiltro === "all" 
+                ? rawData.horario[selectedModel] 
+                : rawData.horario[selectedModel].filter(p => p.x.startsWith(fechaFiltro));
+            
             const datasetBase = (label, data, color, fill = false) => ({
                 label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.2, pointRadius: 0
             });
 
             ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
-                charts[key].data.labels = labelsTraducidos;
-                
+                // SIGUE AL JSON: Mapeo temporal idéntico
+                charts[key].data.labels = d.map(p => p.x);
+
                 if(key === 'temp') {
-                    const dataTemp = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'temp'));
-                    const dataRocio = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'rocio'));
-                    
-                    charts[key].data.datasets = [
-                        datasetBase('Temp', dataTemp, '#ef4444'), 
-                        datasetBase('Rocío', dataRocio, '#06b6d4')
-                    ];
+                    charts[key].data.datasets = [datasetBase('Temp', d.map(p => p.temp), '#ef4444'), datasetBase('Rocío', d.map(p => p.rocio), '#06b6d4')];
                 } else if(key === 'delta') {
-                    const dataDelta = ejeReferenciaHoras.map(p => {
-                        const t = obtenerDatoAproximado(datosModeloActual, p.x, 'temp');
-                        const r = obtenerDatoAproximado(datosModeloActual, p.x, 'rocio');
-                        return (t - r).toFixed(1);
-                    });
-                    charts[key].data.datasets = [datasetBase('Delta', dataDelta, '#f472b6', true)];
+                    charts[key].data.datasets = [datasetBase('Delta', d.map(p => (p.temp - p.rocio).toFixed(1)), '#f472b6', true)];
                 } else if(key === 'humedad') {
-                    const dataHum = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'hum'));
-                    charts[key].data.datasets = [datasetBase('Hum %', dataHum, '#10b981')];
+                    charts[key].data.datasets = [datasetBase('Hum %', d.map(p => p.hum), '#10b981')];
                 } else if(key === 'viento') {
-                    const dataViento = ejeReferenciaHoras.map(p => obtenerDatoAproximado(datosModeloActual, p.x, 'viento'));
-                    charts[key].data.datasets = [datasetBase('Viento m/s', dataViento, '#8b5cf6')];
+                    charts[key].data.datasets = [datasetBase('Viento m/s', d.map(p => p.viento), '#8b5cf6')];
                 }
-                
-                charts[key].options.scales.x = getDynamicXConfig(fechaFiltro !== "all");
+
+                charts[key].options.scales.x = {
+                    ...charts[key].options.scales.x,
+                    ...getDynamicXConfig(fechaFiltro !== "all")
+                };
                 charts[key].update();
             });
-            
-            // Para los KPIs usamos el set de datos maestro mapeado para que no tire errores por falta de registros
-            actualizarKPIs(ejeReferenciaHoras.map(p => ({
-                temp: obtenerDatoAproximado(datosModeloActual, p.x, 'temp'),
-                rocio: obtenerDatoAproximado(datosModeloActual, p.x, 'rocio'),
-                hum: obtenerDatoAproximado(datosModeloActual, p.x, 'hum'),
-                viento: obtenerDatoAproximado(datosModeloActual, p.x, 'viento')
-            })));
+            actualizarKPIs(d);
         }
 
-        // --- HELPERS ---
-        function obtenerDatosFiltrados(datosBrutos) {
-            // 1. Obtenemos la hora EXACTA de tu celular y le restamos 1 hora
-            const limiteHora = new Date();
-            limiteHora.setHours(limiteHora.getHours() - 1);
-            
-            // 2. Formateamos el día actual a 'YYYY-MM-DD' (usando tu zona horaria)
-            const año = limiteHora.getFullYear();
-            const mes = String(limiteHora.getMonth() + 1).padStart(2, '0');
-            const dia = String(limiteHora.getDate()).padStart(2, '0');
-            const hoyStr = `${año}-${mes}-${dia}`;
-
-            return datosBrutos.filter(p => {
-                // Convertimos el string del JSON a un objeto fecha de JS
-                const fechaPunto = new Date(p.x.replace(' ', 'T'));
-                
-                // VISTA GENERAL o VISTA DE HOY: Cortamos el pasado estricto
-                if (fechaFiltro === "all" || fechaFiltro === hoyStr) {
-                    const pasaFiltroHora = fechaPunto >= limiteHora;
-                    const pasaFiltroDia = fechaFiltro === "all" ? true : p.x.startsWith(fechaFiltro);
-                    return pasaFiltroHora && pasaFiltroDia;
-                }
-                
-                // SI ELIGIÓ EL DÍA DE MAÑANA (o futuro): Le mostramos las 24 horas intactas
-                return p.x.startsWith(fechaFiltro);
-            });
-        }
+        // --- HELPERS GENERALES ---
         function actualizarKPIs(datos) {
             if (!datos || !datos.length) return;
-            const temps = datos.map(p => p.temp), vientos = datos.map(p => p.viento);
-            const hums = datos.map(p => p.hum), deltas = datos.map(p => p.temp - p.rocio);
-            document.getElementById('kpi-temp-max').innerText = Math.max(...temps).toFixed(1);
-            document.getElementById('kpi-temp-min').innerText = Math.min(...temps).toFixed(1);
-            document.getElementById('kpi-hum-max').innerText = Math.max(...hums).toFixed(0);
-            document.getElementById('kpi-viento-max').innerText = Math.max(...vientos).toFixed(1);
-            document.getElementById('kpi-delta-min').innerText = Math.min(...deltas).toFixed(1);
-        }
-
-        function obtenerDatoAproximado(datosBrutos, fechaObjetivo, variable) {
-            // Intentamos encontrar el punto exacto
-            const puntoExacto = datosBrutos.find(p => p.x === fechaObjetivo);
-            if (puntoExacto && puntoExacto[variable] !== undefined) {
-                return puntoExacto[variable];
-            }
-
-            // Si no existe el punto exacto (bache de MET Norway), aproximamos linealmente:
-            const tiempoObjetivo = new Date(fechaObjetivo.replace(' ', 'T')).getTime();
+            const temps = datos.map(p => p.temp).filter(v => v !== undefined), vientos = datos.map(p => p.viento).filter(v => v !== undefined);
+            const hums = datos.map(p => p.hum).filter(v => v !== undefined), deltas = datos.map(p => p.temp - p.rocio).filter(v => !isNaN(v));
             
-            // Buscamos el punto anterior más cercano y el posterior más cercano
-            let anterior = null;
-            let posterior = null;
-
-            for (let p of datosBrutos) {
-                const t = new Date(p.x.replace(' ', 'T')).getTime();
-                if (t <= tiempoObjetivo) {
-                    if (!anterior || t > new Date(anterior.x.replace(' ', 'T')).getTime()) {
-                        anterior = p;
-                    }
-                }
-                if (t >= tiempoObjetivo) {
-                    if (!posterior || t < new Date(posterior.x.replace(' ', 'T')).getTime()) {
-                        posterior = p;
-                    }
-                }
-            }
-
-            // Si encontramos ambos, hacemos una interpolación lineal simple
-            if (anterior && posterior && anterior[variable] !== undefined && posterior[variable] !== undefined) {
-                const tAnt = new Date(anterior.x.replace(' ', 'T')).getTime();
-                const tPost = new Date(posterior.x.replace(' ', 'T')).getTime();
-                
-                if (tPost === tAnt) return anterior[variable]; // Evitar división por cero
-                
-                const porcentaje = (tiempoObjetivo - tAnt) / (tPost - tAnt);
-                const valorAproximado = anterior[variable] + porcentaje * (posterior[variable] - anterior[variable]);
-                return valorAproximado;
-            }
-
-            // Si solo hay uno de los lados, devolvemos el que tengamos
-            if (anterior && anterior[variable] !== undefined) return anterior[variable];
-            if (posterior && posterior[variable] !== undefined) return posterior[variable];
-
-            return 0;
+            document.getElementById('kpi-temp-max').innerText = temps.length ? Math.max(...temps).toFixed(1) : '--';
+            document.getElementById('kpi-temp-min').innerText = temps.length ? Math.min(...temps).toFixed(1) : '--';
+            document.getElementById('kpi-hum-max').innerText = hums.length ? Math.max(...hums).toFixed(0) : '--';
+            document.getElementById('kpi-viento-max').innerText = vientos.length ? Math.max(...vientos).toFixed(1) : '--';
+            document.getElementById('kpi-delta-min').innerText = deltas.length ? Math.min(...deltas).toFixed(1) : '--';
         }
-        
+
         function generarSelectorModelos() {
             const container = document.getElementById('model-selector-container');
             container.innerHTML = '';
@@ -587,18 +447,25 @@
             });
         }
 
-        function filtrarPorFecha(val) { fechaFiltro = val; resetAllZooms(); actualizarPantalla(); }
+        function filtrarPorFecha(val) { 
+            fechaFiltro = val; 
+            actualizarPantalla(); 
+            setTimeout(resetAllZooms, 50); // Forzamos recalculado de ejes limpios tras cambiar rango
+        }
 
         function verSeccion(sec) {
             seccionActual = sec;
             ['resumen', 'aire', 'prueba'].forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
-                if(el) el.className = t === sec ? 'btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase' : 'btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase';
+                if(el) el.className = t === sec ? 'btn-tab btn-active flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest' : 'btn-tab bg-slate-800 text-slate-500 flex-1 px-4 py-3 rounded-xl text-[10px] font-800 uppercase tracking-widest';
             });
             actualizarPantalla();
         }
 
-        function resetAllZooms() { Object.values(charts).forEach(c => { if(c.resetZoom) c.resetZoom(); }); }
+        function resetAllZooms() { 
+            Object.values(charts).forEach(c => { if(c.resetZoom) c.resetZoom(); }); 
+        }
+
         window.onload = inicializarApp; 
     </script>
 </body>
