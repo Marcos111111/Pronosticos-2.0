@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Magliano",
-    "actualizado": "09/07 11:42",
+    "actualizado": "09/07 14:30",
     "total_semana": 0.3,
     "certeza": 0
   },
@@ -740,6 +740,14 @@
         "rocio": 9.9,
         "viento": 3.3,
         "hum": 87.0
+      },
+      {
+        "x": "2026-07-16 12:00:00",
+        "y": 0.0,
+        "temp": 16.9,
+        "rocio": 14.2,
+        "viento": 1.8,
+        "hum": 83.6
       }
     ],
     "SMN_WRF": [
@@ -4711,10 +4719,10 @@
       },
       {
         "x": "2026-07-12 18:00:00",
-        "temp": 8.6,
-        "rocio": 5.2,
-        "hum": 79.0,
-        "viento": 2.9,
+        "temp": 11.4,
+        "rocio": 8.2,
+        "hum": 81.0,
+        "viento": 2.5,
         "y": 0.0
       },
       {

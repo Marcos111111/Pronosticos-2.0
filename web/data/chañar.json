@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Chañar",
-    "actualizado": "09/07 11:42",
+    "actualizado": "09/07 14:30",
     "total_semana": 0.7,
     "certeza": 0
   },
@@ -740,6 +740,14 @@
         "rocio": 6.9,
         "viento": 3.2,
         "hum": 75.0
+      },
+      {
+        "x": "2026-07-16 12:00:00",
+        "y": 0.0,
+        "temp": 15.2,
+        "rocio": 12.9,
+        "viento": 1.4,
+        "hum": 86.9
       }
     ],
     "SMN_WRF": [
@@ -4711,10 +4719,10 @@
       },
       {
         "x": "2026-07-12 18:00:00",
-        "temp": 8.6,
-        "rocio": 5.2,
-        "hum": 80.0,
-        "viento": 3.0,
+        "temp": 10.8,
+        "rocio": 7.8,
+        "hum": 82.0,
+        "viento": 2.4,
         "y": 0.0
       },
       {

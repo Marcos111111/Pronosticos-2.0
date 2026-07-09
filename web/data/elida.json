@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Elida",
-    "actualizado": "09/07 11:42",
+    "actualizado": "09/07 14:30",
     "total_semana": 0.1,
     "certeza": 0
   },
@@ -740,6 +740,14 @@
         "rocio": 12.8,
         "viento": 3.0,
         "hum": 98.2
+      },
+      {
+        "x": "2026-07-16 12:00:00",
+        "y": 0.0,
+        "temp": 17.5,
+        "rocio": 14.5,
+        "viento": 2.3,
+        "hum": 82.0
       }
     ],
     "SMN_WRF": [
@@ -4711,10 +4719,10 @@
       },
       {
         "x": "2026-07-12 18:00:00",
-        "temp": 9.1,
-        "rocio": 5.1,
-        "hum": 76.0,
-        "viento": 3.1,
+        "temp": 11.9,
+        "rocio": 8.2,
+        "hum": 78.0,
+        "viento": 2.8,
         "y": 0.0
       },
       {
