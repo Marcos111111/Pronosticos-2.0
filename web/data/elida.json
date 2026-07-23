@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Elida",
-    "actualizado": "23/07 10:37",
+    "actualizado": "23/07 13:37",
     "total_semana": 4.4,
     "certeza": 0
   },
@@ -740,6 +740,14 @@
         "rocio": 6.8,
         "viento": 3.7,
         "hum": 94.2
+      },
+      {
+        "x": "2026-07-30 12:00:00",
+        "y": 0.0,
+        "temp": 16.0,
+        "rocio": 6.7,
+        "viento": 5.5,
+        "hum": 54.3
       }
     ],
     "OpenMeteo": [
@@ -4663,10 +4671,10 @@
       },
       {
         "x": "2026-07-26 18:00:00",
-        "temp": 15.7,
-        "rocio": 11.4,
-        "hum": 76.0,
-        "viento": 4.9,
+        "temp": 15.8,
+        "rocio": 9.8,
+        "hum": 69.0,
+        "viento": 5.1,
         "y": 0.0
       },
       {

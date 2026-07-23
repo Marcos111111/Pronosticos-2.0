@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Chañar",
-    "actualizado": "23/07 10:37",
+    "actualizado": "23/07 13:37",
     "total_semana": 5.4,
     "certeza": 0
   },
@@ -740,6 +740,14 @@
         "rocio": 6.9,
         "viento": 4.4,
         "hum": 94.8
+      },
+      {
+        "x": "2026-07-30 12:00:00",
+        "y": 0.0,
+        "temp": 15.7,
+        "rocio": 6.5,
+        "viento": 5.9,
+        "hum": 54.7
       }
     ],
     "OpenMeteo": [
@@ -4663,10 +4671,10 @@
       },
       {
         "x": "2026-07-26 18:00:00",
-        "temp": 15.5,
-        "rocio": 11.1,
-        "hum": 76.0,
-        "viento": 4.9,
+        "temp": 15.6,
+        "rocio": 9.6,
+        "hum": 69.0,
+        "viento": 5.3,
         "y": 0.0
       },
       {
