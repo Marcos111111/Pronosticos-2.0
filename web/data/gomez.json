@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Gomez",
-    "actualizado": "31/07 05:46",
+    "actualizado": "31/07 08:34",
     "total_semana": 7.4,
     "certeza": 4
   },
@@ -692,6 +692,14 @@
         "rocio": 0.2,
         "viento": 2.4,
         "hum": 65.5
+      },
+      {
+        "x": "2026-08-07 06:00:00",
+        "y": 0.0,
+        "temp": 9.3,
+        "rocio": 0.3,
+        "viento": 2.9,
+        "hum": 53.4
       }
     ],
     "OpenMeteo": [
@@ -4567,10 +4575,10 @@
       },
       {
         "x": "2026-08-03 12:00:00",
-        "temp": 13.7,
-        "rocio": 10.3,
-        "hum": 80.0,
-        "viento": 5.3,
+        "temp": 12.2,
+        "rocio": 7.0,
+        "hum": 71.0,
+        "viento": 4.5,
         "y": 0.0
       },
       {

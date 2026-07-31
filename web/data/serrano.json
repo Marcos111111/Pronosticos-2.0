@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Serrano",
-    "actualizado": "31/07 05:46",
+    "actualizado": "31/07 08:34",
     "total_semana": 7.4,
     "certeza": 8
   },
@@ -692,6 +692,14 @@
         "rocio": -0.5,
         "viento": 2.3,
         "hum": 63.8
+      },
+      {
+        "x": "2026-08-07 06:00:00",
+        "y": 0.0,
+        "temp": 8.3,
+        "rocio": 1.1,
+        "viento": 2.8,
+        "hum": 60.2
       }
     ],
     "OpenMeteo": [
@@ -4567,10 +4575,10 @@
       },
       {
         "x": "2026-08-03 12:00:00",
-        "temp": 12.9,
-        "rocio": 10.5,
-        "hum": 85.0,
-        "viento": 5.3,
+        "temp": 11.4,
+        "rocio": 7.4,
+        "hum": 77.0,
+        "viento": 4.5,
         "y": 0.1
       },
       {

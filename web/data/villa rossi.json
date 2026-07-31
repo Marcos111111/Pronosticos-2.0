@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Villa Rossi",
-    "actualizado": "31/07 05:46",
+    "actualizado": "31/07 08:34",
     "total_semana": 6.1,
     "certeza": 0
   },
@@ -692,6 +692,14 @@
         "rocio": -0.1,
         "viento": 2.2,
         "hum": 67.4
+      },
+      {
+        "x": "2026-08-07 06:00:00",
+        "y": 0.0,
+        "temp": 8.5,
+        "rocio": 1.6,
+        "viento": 3.0,
+        "hum": 62.1
       }
     ],
     "OpenMeteo": [
@@ -4567,10 +4575,10 @@
       },
       {
         "x": "2026-08-03 12:00:00",
-        "temp": 13.8,
-        "rocio": 10.4,
-        "hum": 80.0,
-        "viento": 5.3,
+        "temp": 12.0,
+        "rocio": 7.4,
+        "hum": 74.0,
+        "viento": 4.5,
         "y": 0.0
       },
       {
