@@ -32,6 +32,11 @@ CAMPOS = [
         "nombre": "Villa Rossi", 
         "lat": -34.323873, 
         "lon": -63.264190
+    },
+    {
+        "nombre": "Gral. Levalle", 
+        "lat": -34.016456, 
+        "lon": -63.911778
     }
 ]
 
