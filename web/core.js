@@ -1,5 +1,5 @@
 // --- CONFIGURACIÓN GLOBAL Y ESTADO ---
-export const ARCHIVOS_LISTA = ["gomez.json", "magliano.json","arturo.json", "gral. levalle.json", "chañar.json", "serrano.json", "villa rossi.json", "elida.json"];
+export const ARCHIVOS_LISTA = ["gomez.json", "magliano.json","palloni.json","arturo.json", "gral. levalle.json", "chañar.json", "serrano.json", "villa rossi.json", "elida.json"];
 
 export let charts = {};
 export let rawData = null;

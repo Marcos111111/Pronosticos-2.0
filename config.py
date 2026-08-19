@@ -42,8 +42,12 @@ CAMPOS = [
         "nombre": "Arturo",
         "lat": -34.442823, 
         "lon": -64.000676
+    },
+    {
+        "nombre": "Palloni",
+        "lat": -34.255080, 
+        "lon": -63.551181
     }
-
 ]
 
 # Configuración global del sistema (opcional para el futuro)
