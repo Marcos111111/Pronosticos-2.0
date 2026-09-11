@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Serrano",
-    "actualizado": "11/09 17:39",
+    "actualizado": "11/09 20:11",
     "total_semana": 8.1,
     "certeza": 67
   },
@@ -788,6 +788,14 @@
         "rocio": 10.9,
         "viento": 4.8,
         "hum": 44.8
+      },
+      {
+        "x": "2026-09-18 18:00:00",
+        "y": 0.0,
+        "temp": 16.6,
+        "rocio": 9.8,
+        "viento": 3.8,
+        "hum": 63.5
       }
     ],
     "SMN_WRF": [
@@ -4855,10 +4863,10 @@
       },
       {
         "x": "2026-09-15 00:00:00",
-        "temp": 8.5,
-        "rocio": 4.3,
-        "hum": 75.0,
-        "viento": 3.2,
+        "temp": 11.2,
+        "rocio": 6.1,
+        "hum": 71.0,
+        "viento": 3.4,
         "y": 0.0
       },
       {

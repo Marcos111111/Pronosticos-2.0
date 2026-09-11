@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Villa Rossi",
-    "actualizado": "11/09 17:39",
+    "actualizado": "11/09 20:11",
     "total_semana": 4.8,
     "certeza": 39
   },
@@ -788,6 +788,14 @@
         "rocio": 10.5,
         "viento": 4.5,
         "hum": 43.8
+      },
+      {
+        "x": "2026-09-18 18:00:00",
+        "y": 0.0,
+        "temp": 16.2,
+        "rocio": 9.5,
+        "viento": 3.4,
+        "hum": 64.4
       }
     ],
     "SMN_WRF": [
@@ -4855,10 +4863,10 @@
       },
       {
         "x": "2026-09-15 00:00:00",
-        "temp": 8.2,
-        "rocio": 5.1,
-        "hum": 80.0,
-        "viento": 3.0,
+        "temp": 10.9,
+        "rocio": 6.6,
+        "hum": 75.0,
+        "viento": 3.1,
         "y": 0.0
       },
       {

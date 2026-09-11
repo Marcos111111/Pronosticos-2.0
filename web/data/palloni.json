@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Palloni",
-    "actualizado": "11/09 17:39",
+    "actualizado": "11/09 20:11",
     "total_semana": 5.0,
     "certeza": 60
   },
@@ -788,6 +788,14 @@
         "rocio": 10.3,
         "viento": 4.8,
         "hum": 41.6
+      },
+      {
+        "x": "2026-09-18 18:00:00",
+        "y": 0.0,
+        "temp": 17.0,
+        "rocio": 9.7,
+        "viento": 3.5,
+        "hum": 61.8
       }
     ],
     "SMN_WRF": [
@@ -4855,10 +4863,10 @@
       },
       {
         "x": "2026-09-15 00:00:00",
-        "temp": 8.6,
-        "rocio": 4.7,
-        "hum": 76.0,
-        "viento": 3.1,
+        "temp": 11.4,
+        "rocio": 6.3,
+        "hum": 72.0,
+        "viento": 3.3,
         "y": 0.0
       },
       {

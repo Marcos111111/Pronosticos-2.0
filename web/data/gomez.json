@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Gomez",
-    "actualizado": "11/09 17:39",
+    "actualizado": "11/09 20:11",
     "total_semana": 3.6,
     "certeza": 44
   },
@@ -788,6 +788,14 @@
         "rocio": 10.1,
         "viento": 4.5,
         "hum": 41.5
+      },
+      {
+        "x": "2026-09-18 18:00:00",
+        "y": 0.0,
+        "temp": 16.7,
+        "rocio": 9.6,
+        "viento": 3.4,
+        "hum": 62.2
       }
     ],
     "SMN_WRF": [
@@ -4855,10 +4863,10 @@
       },
       {
         "x": "2026-09-15 00:00:00",
-        "temp": 8.7,
-        "rocio": 5.2,
-        "hum": 80.0,
-        "viento": 3.2,
+        "temp": 11.3,
+        "rocio": 6.7,
+        "hum": 74.0,
+        "viento": 3.3,
         "y": 0.0
       },
       {

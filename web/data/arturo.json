@@ -1,7 +1,7 @@
 {
   "metadata": {
     "lote": "Arturo",
-    "actualizado": "11/09 17:39",
+    "actualizado": "11/09 20:11",
     "total_semana": 5.7,
     "certeza": 74
   },
@@ -788,6 +788,14 @@
         "rocio": 10.2,
         "viento": 5.0,
         "hum": 38.8
+      },
+      {
+        "x": "2026-09-18 18:00:00",
+        "y": 0.0,
+        "temp": 18.0,
+        "rocio": 9.3,
+        "viento": 3.9,
+        "hum": 56.5
       }
     ],
     "SMN_WRF": [
@@ -4855,10 +4863,10 @@
       },
       {
         "x": "2026-09-15 00:00:00",
-        "temp": 9.1,
-        "rocio": 4.0,
-        "hum": 70.0,
-        "viento": 3.5,
+        "temp": 12.1,
+        "rocio": 5.8,
+        "hum": 66.0,
+        "viento": 3.6,
         "y": 0.0
       },
       {
