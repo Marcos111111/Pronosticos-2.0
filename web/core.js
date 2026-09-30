@@ -426,7 +426,7 @@ export function renderizarResumen() {
 
     charts.horario.options.scales.x = {
         ...charts.horario.options.scales.x,
-        ...getDynamicXConfig(fechaFiltro !== "all" )
+        ...getDynamicXConfig(fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3")
     };
     charts.horario.update();
     actualizarKPIs(dRef);
