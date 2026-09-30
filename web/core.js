@@ -312,16 +312,43 @@ export async function cambiarLote(archivo) {
     actualizarPantalla();
 }
 
+function obtenerPuntosFiltrados(listaPuntos) {
+    if (!listaPuntos || listaPuntos.length === 0) return [];
+
+    if (fechaFiltro === "all") {
+        return listaPuntos;
+    } else if (fechaFiltro === "2" || fechaFiltro === "3") {
+        const cantidadDias = parseInt(fechaFiltro); // Toma 2 o 3 según la selección
+        const fechasUnicas = [...new Set(listaPuntos.map(p => p.x.split(' ')[0]))];
+        const diasSeleccionados = fechasUnicas.slice(0, cantidadDias);
+        return listaPuntos.filter(p => diasSeleccionados.includes(p.x.split(' ')[0]));
+    } else {
+        // Día específico (ej: "2026-10-01")
+        return listaPuntos.filter(p => p.x.startsWith(fechaFiltro));
+    }
+}
+
 export function poblarSelectorFechas() {
     const select = document.getElementById('selector-fecha');
-    select.innerHTML = '<option value="all">Próximos 7 días</option>';
+    if (!select) return;
+
+    // 1. Cargamos las opciones fijas globales
+    select.innerHTML = `
+        <option value="all">Próximos 7 días</option>
+        <option value="2">Próximos 2 días</option>
+        <option value="3">Próximos 3 días</option>
+    `;
+
+    // 2. Extraemos y agregamos los días individuales
     const mKey = Object.keys(rawData.horario)[0];
     const diasUnicos = [...new Set(rawData.horario[mKey].map(p => p.x.split(' ')[0]))];
+
     diasUnicos.forEach(f => {
         const d = new Date(f + "T12:00:00");
         const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const opt = document.createElement('option');
-        opt.value = f; opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
+        opt.value = f; 
+        opt.innerText = `${dias[d.getDay()]} ${d.getDate()}`;
         select.appendChild(opt);
     });
 }
@@ -369,16 +396,12 @@ export function renderizarResumen() {
     charts.diario.update();
 
     const modelos = Object.keys(rawData.horario).filter(m => m !== 'CONSENSO');
-    const dRef = fechaFiltro === "all" 
-        ? rawData.horario['OpenMeteo'] 
-        : rawData.horario['OpenMeteo'].filter(p => p.x.startsWith(fechaFiltro));
+    const dRef = obtenerPuntosFiltrados(rawData.horario['OpenMeteo']);
 
     charts.horario.data.labels = dRef.map(p => p.x);
 
     charts.horario.data.datasets = modelos.map(m => {
-        const datosBrutos = fechaFiltro === "all" 
-            ? rawData.horario[m] 
-            : rawData.horario[m].filter(p => p.x.startsWith(fechaFiltro));
+        const datosBrutos = obtenerPuntosFiltrados(rawData.horario[m]);
 
         return {
             label: m,
@@ -399,16 +422,14 @@ export function renderizarResumen() {
 }
 
 export function renderizarClima() {
-    const d = fechaFiltro === "all" 
-        ? rawData.horario[selectedModel] 
-        : rawData.horario[selectedModel].filter(p => p.x.startsWith(fechaFiltro));
+    const d = obtenerPuntosFiltrados(rawData.horario[selectedModel]);
     
     const datasetBase = (label, data, color, fill = false) => ({
         label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.2, pointRadius: 0
     });
 
-    const esVistaUnDia = fechaFiltro !== "all";
-    const configDinamica = getDynamicXConfig(esVistaUnDia);
+    const esVistaDetallada = fechaFiltro !== "all";
+    const configDinamica = getDynamicXConfig(esVistaDetallada);
 
     ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
         charts[key].data.labels = d.map(p => p.x);
@@ -431,13 +452,11 @@ export function renderizarClima() {
 
         const tipoEjeOriginal = charts[key].options.scales.x?.type || 'category';
 
-        // 🌟 ASIGNACIÓN LIMPIA: Seteamos todo en el árbol de opciones principal
         charts[key].options.scales.x = {
             type: tipoEjeOriginal,
             ...configDinamica
         };
 
-        // Forzamos un update completo para que vuelva a compilar el árbol de opciones de cero
         charts[key].update(); 
     });
     actualizarKPIs(d);
