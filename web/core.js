@@ -136,7 +136,7 @@ export function getDynamicXConfig(isFiltered) {
 
         if (puntosEnPantalla > 120) return false;                 // Solo días
         if (puntosEnPantalla > 48)  return hora === 12;            // Días + 12:00
-        if (puntosEnPantalla > 24)  return hora % 6 === 0;         // Cada 6hs
+        if (puntosEnPantalla > 30)  return hora % 6 === 0;         // Cada 6hs
         return hora % 3 === 0;                                     // Cada 3hs
     };
 
@@ -159,13 +159,13 @@ export function getDynamicXConfig(isFiltered) {
 
                 const hora = parseInt(labelActual.split(' ')[1].split(':')[0]);
 
-                // 1. Cambio de día (00:00 hs) -> Muy visible
+                // linea que marca el inicio del dia (tenue para que no se solape con la linea de puntos)
                 if (hora === 0) return 'rgba(255, 255, 255, 0.03)';
 
-                // 2. Múltiples de 3 horas (03:00, 06:00, 09:00...) -> Siempre destacados para guiar la vista
-                if (hora % 3 === 0) return 'rgba(255, 255, 255, 0.25)';
+                // linea cada 3 horas (bien marcadas)
+                if (hora % 3 === 0) return 'rgba(255, 255, 255, 0.20)';
 
-                // 3. Horas intermedias (01:00, 02:00, etc.) -> Muy tenues de fondo
+                // linea cada 1 hora (tenues)
                 return 'rgba(255, 255, 255, 0.03)';
             }
         },
@@ -244,7 +244,12 @@ export const baseOptions = {
     plugins: {
         legend: { display: false },
         zoom: zoomOptions,
-        divisorDias: divisorDiasPlugin
+        divisorDias: divisorDiasPlugin,
+        tooltip: {
+            filter: function (tooltipItem) {
+                return tooltipItem.datasetIndex === 0;
+            }
+        }
     }
 };
 
@@ -272,11 +277,32 @@ export async function inicializarApp() {
         const key = id.replace('chart-', '').replace('-rocio', '');
         const type = id === 'chart-diario' || id === 'chart-horario' ? 'bar' : 'line';
         
-        const optConfig = JSON.parse(JSON.stringify(baseOptions));
-        
-        optConfig.scales.x.ticks.callback = baseOptions.scales.x.ticks.callback;
-        optConfig.plugins.zoom = zoomOptions;
-        optConfig.plugins.divisorDias = divisorDiasPlugin;
+        const optConfig = {
+            ...baseOptions,
+            scales: {
+                ...baseOptions.scales,
+                x: {
+                    ...baseOptions.scales.x,
+                    ...getDynamicXConfig(false)
+                },
+                y: { ...baseOptions.scales.y }
+            },
+            plugins: {
+                ...baseOptions.plugins,
+                zoom: zoomOptions,
+                divisorDias: divisorDiasPlugin,
+                tooltip: {
+                    filter: function (tooltipItem) {
+                            if (id === 'chart-delta'){
+                            const label = tooltipItem.dataset?.label || '';
+                            // Solo muestra el dataset de Delta
+                            return label.toLowerCase().includes('delta', 'humedad');
+                            }
+                            return true
+                    }
+                }
+            }
+        };
 
         if (id === 'chart-diario') optConfig.scales.x.offset = true;
 
