@@ -411,12 +411,15 @@ export function renderizarResumen() {
 
     charts.horario.data.labels = dRef.map(p => p.x);
 
+    // Restaurado: Barras agrupadas originales por modelo
     charts.horario.data.datasets = modelos.map(m => {
         const datosBrutos = obtenerPuntosFiltrados(rawData.horario[m]);
 
         return {
+            type: 'bar',
             label: m,
             backgroundColor: MODEL_COLORS[m],
+            borderRadius: 2,
             data: dRef.map(ref => {
                 const punto = datosBrutos.find(p => p.x === ref.x);
                 return punto ? punto.y : 0;
@@ -424,10 +427,44 @@ export function renderizarResumen() {
         };
     });
 
+    const configXResumen = getDynamicXConfig(fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3");
+
+    if (fechaFiltro === "2" || fechaFiltro === "3") {
+        configXResumen.ticks.callback = function(val) {
+            const label = this.getLabelForValue(val);
+            if (!label || !label.includes(' ')) return '';
+
+            const [fechaStr, horaStr] = label.split(' ');
+            const hora = parseInt(horaStr.split(':')[0]);
+
+            if (hora === 0) {
+                const dt = new Date(fechaStr + "T12:00:00");
+                const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                return `${dias[dt.getDay()]} ${dt.getDate()}`;
+            }
+
+            if (hora === 12) return '12:00';
+
+            return '';
+        };
+    }
+
+    // Clave: offset en x y en grid para enmarcar el grupo de barras completo dentro del intervalo
     charts.horario.options.scales.x = {
         ...charts.horario.options.scales.x,
-        ...getDynamicXConfig(fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3")
+        ...configXResumen,
+        offset: true,
+        grid: {
+            ...configXResumen.grid,
+            offset: true
+        }
     };
+
+    charts.horario.options.scales.y = {
+        ...charts.horario.options.scales.y,
+        stacked: false
+    };
+
     charts.horario.update();
     actualizarKPIs(dRef);
 }
