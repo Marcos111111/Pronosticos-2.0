@@ -130,22 +130,45 @@ export const divisorDiasPlugin = {
 
 // --- CONFIGURACIÓN DINÁMICA DEL EJE X CON PRIORIDAD MANUAL ---
 export function getDynamicXConfig(isFiltered) {
+    const esHoraVisible = (hora, puntosEnPantalla) => {
+        if (isFiltered) return hora % 3 === 0;
+        if (hora === 0) return true; // Inicio de día siempre visible
+
+        if (puntosEnPantalla > 120) return false;                 // Solo días
+        if (puntosEnPantalla > 48)  return hora === 12;            // Días + 12:00
+        if (puntosEnPantalla > 24)  return hora % 6 === 0;         // Cada 6hs
+        return hora % 3 === 0;                                     // Cada 3hs
+    };
+
     return {
-        // 🌟 Usamos funciones dinámicas para obligar al Canvas a romper la caché de líneas
-        grid: isFiltered 
-            ? {
-                display: true,
-                drawOnChartArea: true,
-                color: 'rgba(156, 163, 175, 0.25)', 
-                
-                // 🚀 El secreto: Pasarlos como funciones ejecutables
-                borderDash: () => [4, 4], // Para Chart.js v3 y v4 (Grilla interna)
-                dash: () => [4, 4]         // Por seguridad estructural
-              }
-            : { 
-                display: false, 
-                drawOnChartArea: false 
-              },
+        grid: {
+            display: true,
+            drawOnChartArea: true,
+            borderDash: [4, 4],
+            color: function(context) {
+                const scale = context.scale;
+                const tick = context.tick;
+                if (!scale || !tick) return 'rgba(255, 255, 255, 0.03)';
+
+                const realIndex = tick.value;
+                const labels = context.chart?.data?.labels;
+                if (!labels || !labels[realIndex]) return 'rgba(255, 255, 255, 0.03)';
+
+                const labelActual = labels[realIndex];
+                if (!labelActual.includes(' ')) return 'rgba(255, 255, 255, 0.03)';
+
+                const hora = parseInt(labelActual.split(' ')[1].split(':')[0]);
+
+                // 1. Cambio de día (00:00 hs) -> Muy visible
+                if (hora === 0) return 'rgba(255, 255, 255, 0.03)';
+
+                // 2. Múltiples de 3 horas (03:00, 06:00, 09:00...) -> Siempre destacados para guiar la vista
+                if (hora % 3 === 0) return 'rgba(255, 255, 255, 0.25)';
+
+                // 3. Horas intermedias (01:00, 02:00, etc.) -> Muy tenues de fondo
+                return 'rgba(255, 255, 255, 0.03)';
+            }
+        },
         ticks: {
             maxRotation: 0,
             minRotation: 0,
@@ -163,28 +186,20 @@ export function getDynamicXConfig(isFiltered) {
 
                 const diasSemanas = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-                if (isFiltered) {
-                    return (hora % 3 === 0) ? `${hora}:00` : '';
-                }
-                
-                const minVisible = this.chart.scales.x.min;
-                const maxVisible = this.chart.scales.x.max;
-                const puntosEnPantalla = maxVisible - minVisible;
-
                 if (hora === 0) {
                     const dt = new Date(fechaStr + "T12:00:00");
                     return `${diasSemanas[dt.getDay()]} ${dt.getDate()}`;
                 }
 
-                if (puntosEnPantalla > 120) {
-                    return '';
-                } 
-                else if (puntosEnPantalla <= 120 && puntosEnPantalla > 48) {
-                    return (hora === 12) ? '12:00' : '';
-                } 
-                else {
-                    return (hora % 6 === 0) ? `${hora}:00` : '';
+                const minVisible = this.chart.scales.x.min;
+                const maxVisible = this.chart.scales.x.max;
+                const puntosEnPantalla = maxVisible - minVisible;
+
+                if (esHoraVisible(hora, puntosEnPantalla)) {
+                    return `${hora}:00`;
                 }
+
+                return '';
             }
         }
     };
@@ -211,37 +226,7 @@ export const baseOptions = {
     scales: {
         x: {
             offset: false,
-            ...getDynamicXConfig(false), 
-            grid: {
-                display: true,
-                borderDash: [5, 5], 
-                color: function(context) {
-                    const labels = context.chart.data.labels;
-                    if (!labels || !labels[context.index]) return 'transparent';
-                    
-                    const labelActual = labels[context.index];
-                    const hora = ClimaFormatter.obtenerHoraPura(labelActual);
-
-                    if (hora !== null) {
-                        return hora % 3 === 0 ? 'rgba(255, 255, 255, 0.12)' : 'transparent';
-                    }
-
-                    return 'rgba(255, 255, 255, 0.12)';
-                }
-            },
-            ticks: { 
-                color: '#64748b', 
-                font: { size: 10 },
-                callback: function(val, index) {
-                    const label = this.getLabelForValue(val);
-                    const hora = ClimaFormatter.obtenerHoraPura(label);
-                    
-                    if (hora !== null) {
-                        return hora % 3 === 0 ? label : '';
-                    }
-                    return label;
-                }
-            }
+            ...getDynamicXConfig(false) // Se cargan grid y ticks dinámicos sin sobrescribirlos
         },
         y: { 
             grid: { 
@@ -415,7 +400,7 @@ export function renderizarResumen() {
 
     charts.horario.options.scales.x = {
         ...charts.horario.options.scales.x,
-        ...getDynamicXConfig(fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3")
+        ...getDynamicXConfig(fechaFiltro !== "all" )
     };
     charts.horario.update();
     actualizarKPIs(dRef);
