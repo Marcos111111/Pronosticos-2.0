@@ -415,7 +415,7 @@ export function renderizarResumen() {
 
     charts.horario.options.scales.x = {
         ...charts.horario.options.scales.x,
-        ...getDynamicXConfig(fechaFiltro !== "all")
+        ...getDynamicXConfig(fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3")
     };
     charts.horario.update();
     actualizarKPIs(dRef);
@@ -428,7 +428,7 @@ export function renderizarClima() {
         label, data, borderColor: color, backgroundColor: color + '22', fill, tension: 0.2, pointRadius: 0
     });
 
-    const esVistaDetallada = fechaFiltro !== "all";
+    const esVistaDetallada = fechaFiltro !== "all" && fechaFiltro !== "2" && fechaFiltro !== "3";
     const configDinamica = getDynamicXConfig(esVistaDetallada);
 
     ['temp', 'delta', 'humedad', 'viento'].forEach(key => {
