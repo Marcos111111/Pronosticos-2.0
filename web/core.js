@@ -437,9 +437,6 @@ export function renderizarClima() {
             ...configDinamica
         };
 
-        // 🌟 ELIMINADO: Quitamos por completo el bloque "charts[key].scales.x.options.grid = ..." 
-        // que corrompía el copiado del array borderDash.
-
         // Forzamos un update completo para que vuelva a compilar el árbol de opciones de cero
         charts[key].update(); 
     });

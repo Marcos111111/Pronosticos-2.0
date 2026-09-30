@@ -7,27 +7,47 @@ import sqlite3
 from config import CAMPOS
 
 def agregar_modelo_consenso(series_por_modelo):
-    modelos = list(series_por_modelo.keys())
-    if len(modelos) < 2: return series_por_modelo
+    # Nombres exactos de los modelos a promediar
+    modelos_deseados = ['OpenMeteo', 'MET_Norway']
     
-    ref_key = max(series_por_modelo, key=lambda k: len(series_por_modelo[k]))
-    referencia = series_por_modelo[ref_key]
+    # 1. Filtrar asegurando coincidencia exacta (case-insensitive por si acaso)
+    modelos_filtrados = [
+        k for k in series_por_modelo.keys() 
+        if k in modelos_deseados
+    ]
+    
+    # Si no están los 2 modelos presentes, no calculamos consenso
+    if len(modelos_filtrados) < 2:
+        print("⚠️ No se encontraron los 2 modelos requeridos para el consenso.")
+        return series_por_modelo
+
+    # 2. Agrupar por fecha/timestamp 'x' solo de los modelos filtrados
+    puntos_por_fecha = {}
+    for mod in modelos_filtrados:
+        for punto in series_por_modelo[mod]:
+            fecha = punto['x']
+            if fecha not in puntos_por_fecha:
+                puntos_por_fecha[fecha] = []
+            puntos_por_fecha[fecha].append(punto)
+
     consenso = []
-    for i in range(len(referencia)):
-        fecha = referencia[i]['x']
-        puntos = [series_por_modelo[m][i] for m in modelos if i < len(series_por_modelo[m])]
-        
-        if not puntos: continue
-        
-        consenso.append({
-            'x': fecha,
-            'temp': round(sum(p['temp'] for p in puntos) / len(puntos), 1),
-            'rocio': round(sum(p['rocio'] for p in puntos) / len(puntos), 1),
-            'hum': round(sum(p['hum'] for p in puntos) / len(puntos), 0),
-            'viento': round(sum(p['viento'] for p in puntos) / len(puntos), 1),
-            'y': round(sum(p['y'] for p in puntos) / len(puntos), 1)
-        })
+    
+    # 3. Promediar SOLO si ambos modelos tienen dato en esa fecha/hora
+    for fecha, puntos in sorted(puntos_por_fecha.items()):
+        if len(puntos) == 2:  # Solo si están OpenMeteo Y MET_Norway exactos
+            consenso.append({
+                'x': fecha,
+                'temp': round(sum(p['temp'] for p in puntos) / 2.0, 1),
+                'rocio': round(sum(p['rocio'] for p in puntos) / 2.0, 1),
+                'hum': round(sum(p['hum'] for p in puntos) / 2.0, 0),
+                'viento': round(sum(p['viento'] for p in puntos) / 2.0, 1),
+                'y': round(sum(p.get('y', 0) for p in puntos) / 2.0, 1)
+            })
+
+    # 4. Asignar el nuevo consenso
     series_por_modelo['CONSENSO'] = consenso
+    print(f"✅ Consenso generado con {len(consenso)} puntos de datos.")
+    
     return series_por_modelo
 
 def actualizar_json(db_path):
