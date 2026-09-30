@@ -136,7 +136,7 @@ export function getDynamicXConfig(isFiltered) {
 
         if (puntosEnPantalla > 120) return false;                 // Solo días
         if (puntosEnPantalla > 48)  return hora === 12;            // Días + 12:00
-        if (puntosEnPantalla > 30)  return hora % 6 === 0;         // Cada 6hs
+        if (puntosEnPantalla > 24)  return hora % 6 === 0;         // Cada 6hs
         return hora % 3 === 0;                                     // Cada 3hs
     };
 
